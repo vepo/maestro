@@ -9,4 +9,12 @@ public record Source(List<String> topic, Predicate predicate) {
     public Source(List<String> topic) {
         this(topic, new NoPredicate());
     }
+
+    public Source(String topic) {
+        this(List.of(topic), new NoPredicate());
+    }
+
+    public Source(String topic, Predicate predicate) {
+        this(List.of(topic), predicate);
+    }
 }
