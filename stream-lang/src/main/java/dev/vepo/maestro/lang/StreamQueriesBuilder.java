@@ -2,6 +2,7 @@ package dev.vepo.maestro.lang;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,7 +14,9 @@ import org.slf4j.LoggerFactory;
 
 import dev.vepo.maestro.lang.StreamParser.ComparisonOperatorExpressionContext;
 import dev.vepo.maestro.lang.StreamParser.FieldNameContext;
+import dev.vepo.maestro.lang.StreamParser.LiteralContext;
 import dev.vepo.maestro.lang.StreamParser.TopicNameContext;
+import dev.vepo.maestro.lang.StreamParser.ValueContext;
 import dev.vepo.maestro.lang.model.AggregateFunction;
 import dev.vepo.maestro.lang.model.AggregateStage;
 import dev.vepo.maestro.lang.model.Assignment;
@@ -24,6 +27,7 @@ import dev.vepo.maestro.lang.model.ComparisonOperator;
 import dev.vepo.maestro.lang.model.Duration;
 import dev.vepo.maestro.lang.model.Expression;
 import dev.vepo.maestro.lang.model.FieldReferenceExpression;
+import dev.vepo.maestro.lang.model.FieldReferenceLiteral;
 import dev.vepo.maestro.lang.model.FilterStage;
 import dev.vepo.maestro.lang.model.FlattenStage;
 import dev.vepo.maestro.lang.model.FunctionCallExpression;
@@ -168,12 +172,12 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     @Override
     public void exitTransformStage(StreamParser.TransformStageContext ctx) {
-        List<Assignment> assignments = new ArrayList<>();
-        List<FieldNameContext> fields = ctx.fieldName();
-
-        for (int i = 0; i < fields.size(); i++) {
+        var assignments = new LinkedList<Assignment>();
+        var fields = ctx.fieldName();
+        for (int i = fields.size() - 1; i >= 0; --i) {
             assignments.addFirst(new Assignment(fields.get(i).IDENTIFIER().getText(), expressions.pop()));
         }
+        logger.info("Building assignments: {}", assignments);
         stack.push(new TransformStage(assignments));
     }
 
@@ -224,7 +228,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
             args.addFirst(expressions.pop());
         }
         String functionName = ctx.functionName().getText();
-        stack.push(new FunctionCallExpression(functionName, args));
+        expressions.push(new FunctionCallExpression(functionName, args));
     }
 
     @Override
@@ -234,39 +238,49 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     @Override
     public void exitLiteralExpr(StreamParser.LiteralExprContext ctx) {
-        expressions.push(new LiteralExpression((Literal) stack.pop()));
+        expressions.push(new LiteralExpression(buildLiteral(ctx.literal())));
     }
 
-    @Override
-    public void exitLiteral(StreamParser.LiteralContext ctx) {
+    private Literal buildLiteral(ValueContext ctx) {
+        if (Objects.nonNull(ctx.fieldName())) {
+            return new FieldReferenceLiteral(ctx.fieldName().getText());
+        } else {
+            return buildLiteral(ctx.literal());
+        }
+    }
+
+    private Literal buildLiteral(LiteralContext ctx) {
         if (ctx.STRING() != null) {
             String value = ctx.STRING().getText();
             value = value.substring(1, value.length() - 1); // Remove quotes
-            stack.push(new StringLiteral(value));
+            return new StringLiteral(value);
         } else if (ctx.NUMBER() != null) {
-            stack.push(new NumberLiteral(ctx.NUMBER().getText()));
+            return new NumberLiteral(ctx.NUMBER().getText());
         } else if (ctx.BOOLEAN() != null) {
             boolean value = ctx.BOOLEAN().getText().equalsIgnoreCase("true");
-            stack.push(new BooleanLiteral(value));
+            return new BooleanLiteral(value);
         } else if (ctx.NULL() != null) {
-            stack.push(new NullLiteral());
+            return new NullLiteral();
+        } else {
+            throw new IllegalStateException("Unknown literal! %s".formatted(ctx.getText()));
         }
+
     }
 
     @Override
     public void exitInPredicate(StreamParser.InPredicateContext ctx) {
-        List<Literal> values = new ArrayList<>();
-        for (var literal : ctx.valueList().literal()) {
-            values.add(0, (Literal) stack.pop());
-        }
         String fieldName = ctx.fieldName().getText();
-        expressions.push(new InPredicate(fieldName, values));
+        expressions.push(new InPredicate(fieldName, ctx.valueList()
+                                                       .literal()
+                                                       .stream()
+                                                       .map(this::buildLiteral)
+                                                       .toList()));
     }
 
     @Override
     public void exitBetweenPredicate(StreamParser.BetweenPredicateContext ctx) {
-        Literal upper = (Literal) stack.pop();
-        Literal lower = (Literal) stack.pop();
+        var upper = buildLiteral(ctx.upper);
+        var lower = buildLiteral(ctx.lower);
         String fieldName = ctx.fieldName().getText();
         logger.info("Exiting between! field={} upper={} lower={}", fieldName, lower, upper);
         expressions.push(new BetweenPredicate(fieldName, lower, upper));

@@ -17,7 +17,7 @@ import dev.vepo.maestro.lang.model.SourceStage;
 import dev.vepo.maestro.lang.model.StreamModel;
 import dev.vepo.maestro.lang.model.StringLiteral;
 
-class WhereClauseComparisons {
+class WhereClauseComparisonsTest {
     private final StreamTopologyParser parser = new StreamTopologyParser();
 
     @Test

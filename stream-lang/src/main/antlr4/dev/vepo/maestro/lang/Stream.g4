@@ -35,8 +35,8 @@ flattenStage: FLATTEN fieldName;
 filterStage: WHERE expression;
 
 transformStage:
-	TRANSFORM fieldName '=' expression (
-		',' fieldName '=' expression
+	TRANSFORM fieldName '=' (expression | atomExpression) (
+		',' fieldName '=' (expression | atomExpression)
 	)*;
 
 windowType: TUMBLING | SLIDING | SESSION;
@@ -88,12 +88,12 @@ functionCall:
 functionName: IDENTIFIER;
 
 predicate:
-	fieldName IN valueList				# InPredicate
-	| fieldName BETWEEN value AND value	# BetweenPredicate
-	| fieldName IS NULL					# IsNullPredicate
-	| fieldName IS NOT NULL				# IsNotNullPredicate
-	| fieldName LIKE STRING				# LikePredicate
-	| fieldName REGEX STRING			# RegexPredicate;
+	fieldName IN valueList								# InPredicate
+	| fieldName BETWEEN lower = value AND upper = value	# BetweenPredicate
+	| fieldName IS NULL									# IsNullPredicate
+	| fieldName IS NOT NULL								# IsNotNullPredicate
+	| fieldName LIKE STRING								# LikePredicate
+	| fieldName REGEX STRING							# RegexPredicate;
 
 value: literal | fieldName;
 
