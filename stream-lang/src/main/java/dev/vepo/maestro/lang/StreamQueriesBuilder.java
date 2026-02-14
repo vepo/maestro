@@ -3,10 +3,13 @@ package dev.vepo.maestro.lang;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Stack;
 
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import dev.vepo.maestro.lang.StreamParser.ComparisonOperatorExpressionContext;
 import dev.vepo.maestro.lang.StreamParser.FieldNameContext;
@@ -53,15 +56,14 @@ import dev.vepo.maestro.lang.model.WindowStage;
 import dev.vepo.maestro.lang.model.WindowType;
 
 public class StreamQueriesBuilder extends StreamBaseListener {
+    private static final Logger logger = LoggerFactory.getLogger(StreamQueriesBuilder.class);
     private final Stack<Object> stack = new Stack<>();
+    private final Stack<Query> queries = new Stack<>();
+    private final Stack<Expression> expressions = new Stack<>();
     private StreamModel result;
 
     @Override
     public void exitStreamQueries(StreamParser.StreamQueriesContext ctx) {
-        List<Query> queries = new ArrayList<>();
-        while (!stack.isEmpty() && stack.peek() instanceof Query) {
-            queries.add(0, (Query) stack.pop());
-        }
         result = new StreamModel(queries);
     }
 
@@ -69,7 +71,8 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     public void exitQuery(StreamParser.QueryContext ctx) {
         SourcePipeline pipeline = (SourcePipeline) stack.pop();
         List<String> sinkTopics = parseTopicList(ctx.sinkTopics());
-        stack.push(new Query(pipeline, sinkTopics));
+        logger.info("Exiting query: pipeline={} sink={}", pipeline, sinkTopics);
+        queries.push(new Query(pipeline, sinkTopics));
     }
 
     @Override
@@ -89,7 +92,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         Optional<UniqueBy> uniqueBy = Optional.empty();
 
         if (ctx.where() != null) {
-            whereClause = Optional.of((Expression) stack.pop());
+            whereClause = Optional.of(expressions.pop());
         } else if (ctx.unique() != null) {
             uniqueBy = Optional.of(new UniqueBy(parseFieldList(ctx.unique().fieldList())));
         }
@@ -119,7 +122,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     public void exitAggregateFunction(StreamParser.AggregateFunctionContext ctx) {
         AggregateFunction.AggregateFunctionType type = getAggregateFunctionType(ctx);
         String field = parseField(ctx);
-        Optional<String> alias = ctx.AS() != null ? Optional.of(ctx.IDENTIFIER().getText()) : Optional.empty();
+        Optional<String> alias = ctx.AS() != null ? Optional.of(ctx.IDENTIFIER(1).getText()) : Optional.empty();
         stack.push(new AggregateFunction(type, field, alias));
     }
 
@@ -160,7 +163,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     @Override
     public void exitFilterStage(StreamParser.FilterStageContext ctx) {
-        stack.push(new FilterStage((Expression) stack.pop()));
+        stack.push(new FilterStage(expressions.pop()));
     }
 
     @Override
@@ -169,9 +172,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         List<FieldNameContext> fields = ctx.fieldName();
 
         for (int i = 0; i < fields.size(); i++) {
-            String fieldName = fields.get(i).IDENTIFIER().getText();
-            Expression expr = (Expression) stack.pop();
-            assignments.add(0, new Assignment(fieldName, expr));
+            assignments.addFirst(new Assignment(fields.get(i).IDENTIFIER().getText(), expressions.pop()));
         }
         stack.push(new TransformStage(assignments));
     }
@@ -179,36 +180,36 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     // Expression handling
     @Override
     public void exitParenExpression(StreamParser.ParenExpressionContext ctx) {
-        Expression expr = (Expression) stack.pop();
-        stack.push(new ParenthesizedExpression(expr));
+        var expr = expressions.pop();
+        expressions.push(new ParenthesizedExpression(expr));
     }
 
     @Override
     public void exitNotExpression(StreamParser.NotExpressionContext ctx) {
-        Expression expr = (Expression) stack.pop();
-        stack.push(new NotExpression(expr));
+        expressions.push(new NotExpression(expressions.pop()));
     }
 
     @Override
     public void exitAndExpression(StreamParser.AndExpressionContext ctx) {
-        Expression right = (Expression) stack.pop();
-        Expression left = (Expression) stack.pop();
-        stack.push(new LogicalExpression(left, LogicalOperator.AND, right));
+        var right = expressions.pop();
+        var left = expressions.pop();
+        expressions.push(new LogicalExpression(left, LogicalOperator.AND, right));
     }
 
     @Override
     public void exitOrExpression(StreamParser.OrExpressionContext ctx) {
-        Expression right = (Expression) stack.pop();
-        Expression left = (Expression) stack.pop();
-        stack.push(new LogicalExpression(left, LogicalOperator.OR, right));
+        var right = expressions.pop();
+        var left = expressions.pop();
+        expressions.push(new LogicalExpression(left, LogicalOperator.OR, right));
     }
 
     @Override
     public void exitComparisonOperatorExpression(ComparisonOperatorExpressionContext ctx) {
-        Expression right = (Expression) stack.pop();
-        Expression left = (Expression) stack.pop();
+        var right = expressions.pop();
+        var left = expressions.pop();
         ComparisonOperator op = getComparisonOperator(ctx.comparisonOperator());
-        stack.push(new ComparisonExpression(left, op, right));
+        logger.info("Adding comparison: left={} operator={} right={}", left, op, right);
+        expressions.push(new ComparisonExpression(left, op, right));
     }
 
     @Override
@@ -220,7 +221,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     public void exitFunctionCall(StreamParser.FunctionCallContext ctx) {
         List<Expression> args = new ArrayList<>();
         for (int i = 0; i < ctx.expression().size(); i++) {
-            args.add(0, (Expression) stack.pop());
+            args.addFirst(expressions.pop());
         }
         String functionName = ctx.functionName().getText();
         stack.push(new FunctionCallExpression(functionName, args));
@@ -228,12 +229,12 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     @Override
     public void exitFieldRefExpr(StreamParser.FieldRefExprContext ctx) {
-        stack.push(new FieldReferenceExpression(ctx.fieldName().getText()));
+        expressions.push(new FieldReferenceExpression(ctx.fieldName().getText()));
     }
 
     @Override
     public void exitLiteralExpr(StreamParser.LiteralExprContext ctx) {
-        stack.push(new LiteralExpression((Literal) stack.pop()));
+        expressions.push(new LiteralExpression((Literal) stack.pop()));
     }
 
     @Override
@@ -259,7 +260,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
             values.add(0, (Literal) stack.pop());
         }
         String fieldName = ctx.fieldName().getText();
-        stack.push(new InPredicate(fieldName, values));
+        expressions.push(new InPredicate(fieldName, values));
     }
 
     @Override
@@ -267,31 +268,32 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         Literal upper = (Literal) stack.pop();
         Literal lower = (Literal) stack.pop();
         String fieldName = ctx.fieldName().getText();
-        stack.push(new BetweenPredicate(fieldName, lower, upper));
+        logger.info("Exiting between! field={} upper={} lower={}", fieldName, lower, upper);
+        expressions.push(new BetweenPredicate(fieldName, lower, upper));
     }
 
     @Override
     public void exitIsNullPredicate(StreamParser.IsNullPredicateContext ctx) {
-        stack.push(new IsNullPredicate(ctx.fieldName().getText()));
+        expressions.push(new IsNullPredicate(ctx.fieldName().getText()));
     }
 
     @Override
     public void exitIsNotNullPredicate(StreamParser.IsNotNullPredicateContext ctx) {
-        stack.push(new IsNotNullPredicate(ctx.fieldName().getText()));
+        expressions.push(new IsNotNullPredicate(ctx.fieldName().getText()));
     }
 
     @Override
     public void exitLikePredicate(StreamParser.LikePredicateContext ctx) {
         String pattern = ctx.STRING().getText();
         pattern = pattern.substring(1, pattern.length() - 1); // Remove quotes
-        stack.push(new LikePredicate(ctx.fieldName().getText(), pattern));
+        expressions.push(new LikePredicate(ctx.fieldName().getText(), pattern));
     }
 
     @Override
     public void exitRegexPredicate(StreamParser.RegexPredicateContext ctx) {
         String pattern = ctx.STRING().getText();
         pattern = pattern.substring(1, pattern.length() - 1); // Remove quotes
-        stack.push(new RegexPredicate(ctx.fieldName().getText(), pattern));
+        expressions.push(new RegexPredicate(ctx.fieldName().getText(), pattern));
     }
 
     // Helper methods
@@ -326,31 +328,25 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     }
 
     private String parseField(StreamParser.AggregateFunctionContext ctx) {
-        if (ctx.COUNT() != null) {
+        if (ctx.IDENTIFIER(0).getText().equalsIgnoreCase("count") && Objects.isNull(ctx.fieldName())) {
             return "*";
-        } else if (ctx.fieldName() != null) {
+        } else if (Objects.nonNull(ctx.fieldName())) {
             return ctx.fieldName().getText();
         }
         return "";
     }
 
-    private AggregateFunction.AggregateFunctionType getAggregateFunctionType(
-                                                                             StreamParser.AggregateFunctionContext ctx) {
-        if (ctx.COUNT() != null)
-            return AggregateFunction.AggregateFunctionType.COUNT;
-        if (ctx.SUM() != null)
-            return AggregateFunction.AggregateFunctionType.SUM;
-        if (ctx.AVG() != null)
-            return AggregateFunction.AggregateFunctionType.AVG;
-        if (ctx.MIN() != null)
-            return AggregateFunction.AggregateFunctionType.MIN;
-        if (ctx.MAX() != null)
-            return AggregateFunction.AggregateFunctionType.MAX;
-        if (ctx.FIRST() != null)
-            return AggregateFunction.AggregateFunctionType.FIRST;
-        if (ctx.LAST() != null)
-            return AggregateFunction.AggregateFunctionType.LAST;
-        throw new IllegalArgumentException("Unknown aggregate function");
+    private AggregateFunction.AggregateFunctionType getAggregateFunctionType(StreamParser.AggregateFunctionContext ctx) {
+        return switch (ctx.IDENTIFIER(0).getText().toLowerCase()) {
+            case "count" -> AggregateFunction.AggregateFunctionType.COUNT;
+            case "sum" -> AggregateFunction.AggregateFunctionType.SUM;
+            case "avg" -> AggregateFunction.AggregateFunctionType.AVG;
+            case "min" -> AggregateFunction.AggregateFunctionType.MIN;
+            case "max" -> AggregateFunction.AggregateFunctionType.MAX;
+            case "first" -> AggregateFunction.AggregateFunctionType.FIRST;
+            case "last" -> AggregateFunction.AggregateFunctionType.LAST;
+            default -> throw new IllegalArgumentException("Unknown aggregate function: %s".formatted(ctx.IDENTIFIER(0).getText()));
+        };
     }
 
     private ComparisonOperator getComparisonOperator(StreamParser.ComparisonOperatorContext ctx) {

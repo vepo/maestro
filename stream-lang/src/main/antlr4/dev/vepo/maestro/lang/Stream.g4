@@ -1,7 +1,7 @@
 grammar Stream;
 
 // Parser Rules
-streamQueries: query+ EOF;
+streamQueries: query (SEMICOLON query)* SEMICOLON? EOF;
 
 query: FROM sourcePipeline TO sinkTopics;
 
@@ -52,13 +52,8 @@ timeUnit: MILLISECONDS | SECONDS | MINUTES | HOURS | DAYS;
 joinCondition: fieldName '=' fieldName;
 
 aggregateFunction:
-	COUNT '(' '*' ')' (AS IDENTIFIER)?
-	| SUM '(' fieldName ')' (AS IDENTIFIER)?
-	| AVG '(' fieldName ')' (AS IDENTIFIER)?
-	| MIN '(' fieldName ')' (AS IDENTIFIER)?
-	| MAX '(' fieldName ')' (AS IDENTIFIER)?
-	| FIRST '(' fieldName ')' (AS IDENTIFIER)?
-	| LAST '(' fieldName ')' (AS IDENTIFIER)?;
+	IDENTIFIER '(' '*' ')' (AS IDENTIFIER)?
+	| IDENTIFIER '(' fieldName ')' (AS IDENTIFIER)?;
 
 sourceTopics: topicName (',' topicName)*;
 sinkTopics: topicName (',' topicName)*;
@@ -133,13 +128,6 @@ SLIDING: [Ss][Ll][Ii][Dd][Ii][Nn][Gg];
 SESSION: [Ss][Ee][Ss][Ss][Ii][Oo][Nn];
 EVERY: [Ee][Vv][Ee][Rr][Yy];
 AS: [Aa][Ss];
-COUNT: [Cc][Oo][Uu][Nn][Tt];
-SUM: [Ss][Uu][Mm];
-AVG: [Aa][Vv][Gg];
-MIN: [Mm][Ii][Nn];
-MAX: [Mm][Aa][Xx];
-FIRST: [Ff][Ii][Rr][Ss][Tt];
-LAST: [Ll][Aa][Ss][Tt];
 REGEX: [Rr][Ee][Gg][Ee][Xx];
 MILLISECONDS:
 	[Mm][Ss]
@@ -162,6 +150,7 @@ GTE: '>=';
 LPAREN: '(';
 RPAREN: ')';
 COMMA: ',';
+SEMICOLON: ';';
 
 // Literals
 BOOLEAN: [Tt][Rr][Uu][Ee] | [Ff][Aa][Ll][Ss][Ee];

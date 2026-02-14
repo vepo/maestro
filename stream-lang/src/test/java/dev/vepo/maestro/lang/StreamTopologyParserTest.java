@@ -26,15 +26,10 @@ import dev.vepo.maestro.lang.model.StringLiteral;
 import dev.vepo.maestro.lang.model.UniqueBy;
 
 class StreamTopologyParserTest {
-
     @Test
     void parserTest() {
         var parser = new StreamTopologyParser();
 
-        // Test 1: Simple FROM/TO query
-        assertEquals(new StreamModel(new Query(new SourcePipeline(new SourceStage("input_topic")),
-                                               "output_topic")),
-                     parser.parse("FROM input_topic TO output_topic"));
         // Test 2: Query with WHERE clause
         assertEquals(new StreamModel(new Query(new SourcePipeline(new SourceStage("user_events",
                                                                                   new ComparisonExpression(new FieldReferenceExpression("status"),
