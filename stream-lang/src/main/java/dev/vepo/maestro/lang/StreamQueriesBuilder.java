@@ -23,10 +23,12 @@ import dev.vepo.maestro.lang.StreamParser.NotExpressionContext;
 import dev.vepo.maestro.lang.StreamParser.QueryContext;
 import dev.vepo.maestro.lang.StreamParser.ToContext;
 import dev.vepo.maestro.lang.StreamParser.TopicNameContext;
+import dev.vepo.maestro.lang.StreamParser.UniqueContext;
 import dev.vepo.maestro.lang.StreamParser.ValueContext;
 import dev.vepo.maestro.lang.model.Sink;
 import dev.vepo.maestro.lang.model.Source;
 import dev.vepo.maestro.lang.model.StreamQuery;
+import dev.vepo.maestro.lang.model.UniqueBy;
 import dev.vepo.maestro.lang.model.predicate.AndPredicate;
 import dev.vepo.maestro.lang.model.predicate.FieldPredicate;
 import dev.vepo.maestro.lang.model.predicate.ListValue;
@@ -41,22 +43,24 @@ import dev.vepo.maestro.lang.model.predicate.StringValue;
 import dev.vepo.maestro.lang.model.predicate.Value;
 
 public class StreamQueriesBuilder extends StreamBaseListener {
-    private static final Logger logger = LoggerFactory.getLogger(StreamQueriesBuilder.class);
-
-    private final List<StreamQuery> queries;
-    private Context context;
-
     private class Context {
         private Source from;
         private Sink to;
+        private UniqueBy uniqueBy;
         private List<Predicate> predicates;
 
         private Context() {
             this.from = null;
             this.to = null;
+            this.uniqueBy = UniqueBy.EMPTY;
             this.predicates = new LinkedList<>();
         }
     }
+
+    private static final Logger logger = LoggerFactory.getLogger(StreamQueriesBuilder.class);
+    private final List<StreamQuery> queries;
+
+    private Context context;
 
     public StreamQueriesBuilder() {
         this.queries = new ArrayList<>();
@@ -121,12 +125,49 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     }
 
     @Override
+    public void exitUnique(UniqueContext ctx) {
+        this.context.uniqueBy = new UniqueBy(ctx.fieldList()
+                                                .IDENTIFIER()
+                                                .stream()
+                                                .map(TerminalNode::getText)
+                                                .toList());
+    }
+
+    @Override
     public void exitComparisonPredicate(ComparisonPredicateContext ctx) {
         logger.info("Exit predicate Compare!");
         requireNonNull(this.context, "'context' cannot be null");
         this.context.predicates.add(new FieldPredicate(ctx.IDENTIFIER().getText(),
                                                        Operator.fromString(ctx.comparator().getText()),
                                                        loadValue(ctx.value())));
+    }
+
+    @Override
+    public void exitFrom(FromContext ctx) {
+        logger.info("Exit predicate FROM!");
+        requireNonNull(this.context, "'context' cannot be null");
+        this.context.from = new Source(ctx.sourceTopics()
+                                          .topicName()
+                                          .stream().map(TopicNameContext::IDENTIFIER)
+                                          .map(TerminalNode::getText)
+                                          .toList(),
+                                       this.context.predicates.isEmpty() ? new NoPredicate() : this.context.predicates.getFirst(),
+                                       this.context.uniqueBy);
+    }
+
+    @Override
+    public void exitTo(ToContext ctx) {
+        logger.info("Exit predicate TO!");
+        requireNonNull(this.context, "'context' cannot be null");
+        this.context.to = new Sink(ctx.sinkTopics()
+                                      .topicName()
+                                      .stream().map(TopicNameContext::IDENTIFIER)
+                                      .map(TerminalNode::getText)
+                                      .toList());
+    }
+
+    public List<StreamQuery> getQueries() {
+        return queries;
     }
 
     private Value loadValue(ValueContext ctx) {
@@ -147,33 +188,6 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     private String unescapeString(String value) {
         return value.substring(1, value.length() - 1);
-    }
-
-    @Override
-    public void exitFrom(FromContext ctx) {
-        logger.info("Exit predicate FROM!");
-        requireNonNull(this.context, "'context' cannot be null");
-        this.context.from = new Source(ctx.sourceTopics()
-                                          .topicName()
-                                          .stream().map(TopicNameContext::IDENTIFIER)
-                                          .map(TerminalNode::getText)
-                                          .toList(),
-                                       this.context.predicates.isEmpty() ? new NoPredicate() : this.context.predicates.getFirst());
-    }
-
-    @Override
-    public void exitTo(ToContext ctx) {
-        logger.info("Exit predicate TO!");
-        requireNonNull(this.context, "'context' cannot be null");
-        this.context.to = new Sink(ctx.sinkTopics()
-                                      .topicName()
-                                      .stream().map(TopicNameContext::IDENTIFIER)
-                                      .map(TerminalNode::getText)
-                                      .toList());
-    }
-
-    public List<StreamQuery> getQueries() {
-        return queries;
     }
 
 }

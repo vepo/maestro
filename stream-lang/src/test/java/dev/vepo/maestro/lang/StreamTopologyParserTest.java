@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import dev.vepo.maestro.lang.model.Sink;
 import dev.vepo.maestro.lang.model.Source;
 import dev.vepo.maestro.lang.model.StreamQuery;
+import dev.vepo.maestro.lang.model.UniqueBy;
 import dev.vepo.maestro.lang.model.predicate.AndPredicate;
 import dev.vepo.maestro.lang.model.predicate.FieldPredicate;
 import dev.vepo.maestro.lang.model.predicate.ListValue;
@@ -44,5 +45,11 @@ class StreamTopologyParserTest {
                                                                                                                             new NullValue())))),
                                              new Sink("alerts_topic"))),
                      parser.parse("FROM sensor_data WHERE temperature BETWEEN 20 AND 30 AND NOT alert IS NULL TO alerts_topic"));
+
+        // Add the UNIQUE BY test case
+        assertEquals(List.of(new StreamQuery(new Source("clickstream",
+                                                        new UniqueBy(List.of("user_id", "session_id"))),
+                                             new Sink("deduped_topic"))),
+                     parser.parse("FROM clickstream UNIQUE BY user_id, session_id TO deduped_topic"));
     }
 }
