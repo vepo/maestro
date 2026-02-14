@@ -3,40 +3,104 @@ grammar Stream;
 // Parser Rules
 streamQueries: query+ EOF;
 
-query: from to;
+query: FROM sourcePipeline TO sinkTopics;
 
-from: FROM sourceTopics (where? | unique?);
+sourcePipeline: sourceStage (PIPE processingStage)*;
 
-where: WHERE expression;
+sourceStage: sourceTopics (where? | unique?);
 
-unique: UNIQUE BY fieldList;
+processingStage:
+	projectStage
+	| aggregateStage
+	| windowStage
+	| joinStage
+	| flattenStage
+	| filterStage
+	| transformStage;
 
-to: TO sinkTopics;
+projectStage: PROJECT fieldList;
+
+aggregateStage:
+	AGGREGATE BY fieldList? aggregateFunction (
+		',' aggregateFunction
+	)*;
+
+windowStage: WINDOW windowType windowSize (slideInterval)?;
+
+joinStage:
+	JOIN WITH sourceTopics ON joinCondition (windowType?);
+
+flattenStage: FLATTEN fieldName;
+
+filterStage: WHERE expression;
+
+transformStage:
+	TRANSFORM fieldName '=' expression (
+		',' fieldName '=' expression
+	)*;
+
+windowType: TUMBLING | SLIDING | SESSION;
+
+windowSize: duration;
+
+slideInterval: EVERY duration;
+
+duration: NUMBER timeUnit;
+
+timeUnit: MILLISECONDS | SECONDS | MINUTES | HOURS | DAYS;
+
+joinCondition: fieldName '=' fieldName;
+
+aggregateFunction:
+	COUNT '(' '*' ')' (AS IDENTIFIER)?
+	| SUM '(' fieldName ')' (AS IDENTIFIER)?
+	| AVG '(' fieldName ')' (AS IDENTIFIER)?
+	| MIN '(' fieldName ')' (AS IDENTIFIER)?
+	| MAX '(' fieldName ')' (AS IDENTIFIER)?
+	| FIRST '(' fieldName ')' (AS IDENTIFIER)?
+	| LAST '(' fieldName ')' (AS IDENTIFIER)?;
 
 sourceTopics: topicName (',' topicName)*;
 sinkTopics: topicName (',' topicName)*;
-fieldList: IDENTIFIER (',' IDENTIFIER)*;
+fieldList: fieldName (',' fieldName)*;
+fieldName: IDENTIFIER;
 
 topicName: IDENTIFIER;
+where: WHERE expression;
+unique: UNIQUE BY fieldList;
 
 expression:
-	LPAREN expression RPAREN	# ParenExpression
-	| NOT expression			# NotExpression
-	| expression AND expression	# AndExpression
-	| expression OR expression	# OrExpression
-	| predicate					# PredicateExpr;
+	LPAREN expression RPAREN					# ParenExpression
+	| NOT expression							# NotExpression
+	| left = expression AND right = expression	# AndExpression
+	| left = expression OR right = expression	# OrExpression
+	| comparisonExpression						# ComparisonExpr;
+
+comparisonExpression:
+	left = atomExpression comparisonOperator right = atomExpression	# ComparisonOperatorExpression
+	| atomExpression												# AtomExpr;
+
+atomExpression:
+	predicate		# PredicateExpr
+	| functionCall	# FunctionExpr
+	| fieldName		# FieldRefExpr
+	| literal		# LiteralExpr;
+comparisonOperator: EQ | NEQ | LT | LTE | GT | GTE;
+
+functionCall:
+	functionName '(' (expression (',' expression)*)? ')';
+
+functionName: IDENTIFIER;
 
 predicate:
-	IDENTIFIER comparator value				# ComparisonPredicate
-	| IDENTIFIER IN valueList				# InPredicate
-	| IDENTIFIER BETWEEN value AND value	# BetweenPredicate
-	| IDENTIFIER IS NULL					# IsNullPredicate
-	| IDENTIFIER IS NOT NULL				# IsNotNullPredicate
-	| IDENTIFIER LIKE STRING				# LikePredicate;
+	fieldName IN valueList				# InPredicate
+	| fieldName BETWEEN value AND value	# BetweenPredicate
+	| fieldName IS NULL					# IsNullPredicate
+	| fieldName IS NOT NULL				# IsNotNullPredicate
+	| fieldName LIKE STRING				# LikePredicate
+	| fieldName REGEX STRING			# RegexPredicate;
 
-comparator: EQ | NEQ | LT | LTE | GT | GTE;
-
-value: literal | IDENTIFIER;
+value: literal | fieldName;
 
 valueList: LPAREN literal (',' literal)* RPAREN;
 
@@ -56,8 +120,37 @@ BETWEEN: [Bb][Ee][Tt][Ww][Ee][Ee][Nn];
 IS: [Ii][Ss];
 NULL: [Nn][Uu][Ll][Ll];
 LIKE: [Ll][Ii][Kk][Ee];
+PROJECT: [Pp][Rr][Oo][Jj][Ee][Cc][Tt];
+AGGREGATE: [Aa][Gg][Gg][Rr][Ee][Gg][Aa][Tt][Ee];
+WINDOW: [Ww][Ii][Nn][Dd][Oo][Ww];
+JOIN: [Jj][Oo][Ii][Nn];
+WITH: [Ww][Ii][Tt][Hh];
+ON: [Oo][Nn];
+FLATTEN: [Ff][Ll][Aa][Tt][Tt][Ee][Nn];
+TRANSFORM: [Tt][Rr][Aa][Nn][Ss][Ff][Oo][Rr][Mm];
+TUMBLING: [Tt][Uu][Mm][Bb][Ll][Ii][Nn][Gg];
+SLIDING: [Ss][Ll][Ii][Dd][Ii][Nn][Gg];
+SESSION: [Ss][Ee][Ss][Ss][Ii][Oo][Nn];
+EVERY: [Ee][Vv][Ee][Rr][Yy];
+AS: [Aa][Ss];
+COUNT: [Cc][Oo][Uu][Nn][Tt];
+SUM: [Ss][Uu][Mm];
+AVG: [Aa][Vv][Gg];
+MIN: [Mm][Ii][Nn];
+MAX: [Mm][Aa][Xx];
+FIRST: [Ff][Ii][Rr][Ss][Tt];
+LAST: [Ll][Aa][Ss][Tt];
+REGEX: [Rr][Ee][Gg][Ee][Xx];
+MILLISECONDS:
+	[Mm][Ss]
+	| [Mm][Ii][Ll][Ll][Ii][Ss][Ee][Cc][Oo][Nn][Dd][Ss];
+SECONDS: [Ss] | [Ss][Ee][Cc][Oo][Nn][Dd][Ss];
+MINUTES: [Mm] | [Mm][Ii][Nn][Uu][Tt][Ee][Ss];
+HOURS: [Hh] | [Hh][Oo][Uu][Rr][Ss];
+DAYS: [Dd] | [Dd][Aa][Yy][Ss];
 
 // Operators
+PIPE: '|>';
 EQ: '=';
 NEQ: '!=' | '<>';
 LT: '<';
