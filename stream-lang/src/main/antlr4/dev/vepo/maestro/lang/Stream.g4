@@ -39,7 +39,7 @@ transformStage:
 		',' fieldName '=' (expression | atomExpression)
 	)*;
 
-windowType: TUMBLING | SLIDING | SESSION;
+windowType: IDENTIFIER;
 
 windowSize: duration;
 
@@ -123,9 +123,6 @@ WITH: [Ww][Ii][Tt][Hh];
 ON: [Oo][Nn];
 FLATTEN: [Ff][Ll][Aa][Tt][Tt][Ee][Nn];
 TRANSFORM: [Tt][Rr][Aa][Nn][Ss][Ff][Oo][Rr][Mm];
-TUMBLING: [Tt][Uu][Mm][Bb][Ll][Ii][Nn][Gg];
-SLIDING: [Ss][Ll][Ii][Dd][Ii][Nn][Gg];
-SESSION: [Ss][Ee][Ss][Ss][Ii][Oo][Nn];
 EVERY: [Ee][Vv][Ee][Rr][Yy];
 AS: [Aa][Ss];
 REGEX: [Rr][Ee][Gg][Ee][Xx];

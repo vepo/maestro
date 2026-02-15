@@ -49,8 +49,7 @@ class ProcessingStagesTest {
 
     @Test
     void shouldParseTransformStage() {
-        assertEquals(new StreamModel(new Query(
-                                               new SourcePipeline(new SourceStage("events"),
+        assertEquals(new StreamModel(new Query(new SourcePipeline(new SourceStage("events"),
                                                                   new TransformStage(new Assignment("full_name",
                                                                                                     new FunctionCallExpression("CONCAT",
                                                                                                                                new FieldReferenceExpression("first_name"),

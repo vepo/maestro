@@ -102,6 +102,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         }
 
         stack.push(new SourceStage(topics, whereClause, uniqueBy));
+        logger.info("Exiting source stage: {}", stack);
     }
 
     @Override
@@ -136,6 +137,7 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         Duration windowSize = (Duration) stack.pop();
         Optional<Duration> slideInterval = ctx.slideInterval() != null ? Optional.of((Duration) stack.pop()) : Optional.empty();
         stack.push(new WindowStage(windowType, windowSize, slideInterval));
+        logger.info("Exiting window stage: {}", stack);
     }
 
     @Override
