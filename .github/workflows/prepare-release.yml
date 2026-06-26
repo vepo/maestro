@@ -1,0 +1,44 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Run tests
+        run: mvn -B verify
+
+      - name: Bump version, tag, and push
+        id: release
+        run: bash .github/scripts/prepare-release.sh
+
+      - name: Summary
+        run: |
+          echo "### Release prepared" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ steps.release.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Released version: \`${{ steps.release.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Main now at: \`${{ steps.release.outputs.next_snapshot }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The [Release](.github/workflows/release.yml) workflow runs on the new tag and publishes packages." >> "$GITHUB_STEP_SUMMARY"

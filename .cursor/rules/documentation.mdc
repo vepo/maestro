@@ -29,6 +29,7 @@ Never document syntax that fails `StreamTopologyParser` unless marked *planned*.
 | New SDK builder method | `samples/sdk/README.md` → `docs/getting-started.md` Option B |
 | CLI / env flag on `MaestroAppMain` | `docs/deployment.md` → `docs/getting-started.md` |
 | Operator reconcile behavior | `docs/deployment.md` → `samples/kubernetes/README.md` → matrix |
+| Release workflow / packaging | `docs/deployment.md` Releases section → `.github/workflows/*.yml` |
 | New deployment layer or module | `README.md` → `docs/index.md` → `AGENTS.md` module table |
 
 ## Sample application rules

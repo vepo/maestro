@@ -128,3 +128,41 @@ Kafka Streams properties are passed through `MaestroConfigs` as a `Map<String, O
 | `application.id` | `StreamsConfig.APPLICATION_ID_CONFIG` | Consumer group / app id |
 
 Additional Streams settings (state dir, replication factor, etc.) can be added to the same map.
+
+## Releases
+
+Releases are automated with GitHub Actions — see [.github/README.md](../.github/README.md) for the full pipeline.
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **Build** | PR / push to `main` | `mvn verify` + SonarCloud |
+| **Prepare Release** | Manual (`workflow_dispatch`) | Sets release version, creates `v<version>` tag, bumps patch and restores `-SNAPSHOT` on `main` |
+| **Release** | Push tag `v*.*.*` | Publishes Maven artifacts to GitHub Packages, pushes the Docker image to `ghcr.io`, and attaches installers to a GitHub Release |
+
+### Prepare a release
+
+1. Ensure **Build** is green on `main`.
+2. Go to **Actions → Prepare Release → Run workflow**.
+3. On success, `main` moves to the next SNAPSHOT (e.g. `0.0.1-SNAPSHOT` → tag `v0.0.1` → `0.0.2-SNAPSHOT`).
+4. The **Release** workflow runs automatically on the new tag.
+
+### Consume published artifacts
+
+**Maven** (add to `pom.xml`):
+
+```xml
+<repository>
+  <id>github</id>
+  <url>https://maven.pkg.github.com/vepo/maestro</url>
+</repository>
+```
+
+Authenticate with a GitHub PAT or `GITHUB_TOKEN` in `~/.m2/settings.xml` (server `id` must be `github`).
+
+**Container:**
+
+```bash
+docker pull ghcr.io/vepo/maestro/maestro-app:<version>
+```
+
+**GitHub Release assets:** shaded `maestro-app` JAR, `maestro-operator` JAR, and `streamapplication-crd.yaml`.
