@@ -1,5 +1,8 @@
 package dev.vepo.maestro.parser;
 
+import static dev.vepo.maestro.parser.DomainFixtures.query;
+import static dev.vepo.maestro.parser.DomainFixtures.streamModel;
+import static dev.vepo.maestro.parser.Scenario.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
@@ -14,9 +17,17 @@ class BasicQueriesTest {
 
     @Test
     void shouldParseSimpleQuery() {
-        assertEquals(new StreamModel(new Query(new SourcePipeline(new SourceStage("input_topic")),
-                                               "output_topic")),
-                     parser.parse("FROM input_topic TO output_topic"));
+        var expected = streamModel(query("input_topic", "output_topic"));
+        var parsed = new StreamModel[1];
+
+        given("a Query with one source topic and one sink topic")
+            .when("the Stream Language is parsed")
+            .then("a StreamModel with the matching Query is produced")
+            .run(
+                () -> { },
+                () -> parsed[0] = parser.parse("FROM input_topic TO output_topic"),
+                () -> assertEquals(expected, parsed[0])
+            );
     }
 
     @Test

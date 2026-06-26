@@ -1,0 +1,65 @@
+---
+description: ANTLR grammar and Stream Language syntax for Maestro
+globs: "**/Stream.g4,**/StreamQueriesBuilder.java,**/StreamTopologyParser.java"
+alwaysApply: false
+---
+
+# ANTLR & Stream Language
+
+Grammar file (only place to change syntax):
+
+`maestro-parser/src/main/antlr4/dev/vepo/maestro/parser/Stream.g4`
+
+## Pipeline
+
+```
+Stream.g4 → ANTLR generates lexer/parser/listener (target/)
+         → StreamQueriesBuilder (listener, hand-written)
+         → StreamTopologyParser.parse(String) → StreamModel
+```
+
+Never edit generated files. Rebuild: `mvn -pl maestro-parser generate-sources test`.
+
+## Canonical syntax (from grammar)
+
+```
+FROM topic1, topic2 [WHERE expr | UNIQUE BY f1, f2]
+  ( |> PROJECT f1, f2
+  | |> WHERE expr              -- FilterStage (not "FILTER WHERE")
+  | |> TRANSFORM f1 = expr     -- not "MAP SET"
+  | |> AGGREGATE BY f1 COUNT(*) AS alias
+  | |> WINDOW TUMBLING 5 MINUTES [EVERY 1 MINUTES]
+  | |> JOIN WITH other ON left = right
+  | |> FLATTEN field
+  )*
+TO sink1, sink2;
+```
+
+Stages chain with `|>` (`PIPE`). Keywords are case-insensitive.
+
+## WHERE placement
+
+- **SourceStage** — `FROM topic WHERE expr` → `SourceStage.whereClause`
+- **FilterStage** — `|> WHERE expr` → pipeline `FilterStage`
+
+Both use `Expression`; different domain locations.
+
+## Builder pattern (`StreamQueriesBuilder`)
+
+- Extends generated `StreamBaseListener` (listener, not visitor)
+- Two stacks: `stack` (pipeline objects), `expressions` (WHERE trees)
+- `ProcessingStage` list built in reverse pop order in `exitSourcePipeline`
+- `WindowType.valueOf(identifier.toUpperCase())` — identifiers must match enum names
+- Entry point for parsing: `StreamTopologyParser` only
+
+## Invalid syntax agents often invent (reject)
+
+| Wrong | Correct |
+|-------|---------|
+| `\|> FILTER WHERE x = 1` | `\|> WHERE x = 1` |
+| `\|> PROJECT fields: a, b` | `\|> PROJECT a, b` |
+| `\|> GROUP BY status` | `\|> AGGREGATE BY status COUNT(*) …` |
+| `\|> MAP SET …` | `\|> TRANSFORM field = expr` |
+| `\|> JOIN … LOOKUP TABLE` | `\|> JOIN WITH topic ON a = b` |
+
+Copy syntax from parser tests, not disabled engine tests.

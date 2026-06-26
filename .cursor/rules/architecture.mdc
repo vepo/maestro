@@ -52,3 +52,7 @@ API      ──→ Code      ──→ Domain
 - Cross-layer API changes start in domain/code and propagate upward with tests at each layer
 - Generated code stays under `target/`; never edit ANTLR output by hand
 - Add new modules to the parent `pom.xml` under the correct layer package (`dev.vepo.maestro.<layer>`)
+
+## Engine MVP (current)
+
+`MaestroApplication` wires **passthrough only**. Rich stage model exists in `parser.model`; engine stage translation is added incrementally per `engine-runtime.mdc`. Do not assume all parser stages run in Kafka Streams yet.

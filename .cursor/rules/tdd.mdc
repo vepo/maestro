@@ -6,46 +6,32 @@ alwaysApply: false
 
 # TDD
 
+Follow `testing-dsl.mdc` for scenario structure and domain language in every test.
+
 ## Red → Green → Refactor
 
-1. **Red** — failing test describing behavior in **domain terms** (`StreamModel`, reconcile outcome, SDK topology)
+1. **Red** — failing scenario in domain terms (`Given`/`When`/`Then` + `should…` method name)
 2. **Green** — smallest production change that passes
 3. **Refactor** — clean up after green; keep tests passing
 
-Never ship parser, engine, SDK, or operator logic without a test that would fail without it.
+Never ship parser, engine, SDK, or operator logic without a scenario that would fail without it.
 
-## Test naming
+## Scenario-first
 
 ```java
 @Test
-void shouldParseQueryWithMultipleSinkTopics() { ... }
-
-@Test
-void shouldReconcileWhenDesiredModelChanges() { ... }
-
-@Test
-void shouldBuildSameModelAsParserForSimplePipeline() { ... }
+void shouldParseQueryWithMultipleSinkTopics() {
+    given("a Query with one source topic and multiple sink topics")
+        .when("the Stream Language is parsed")
+        .then("the StreamModel lists every sink topic")
+        .run(
+            () -> { },
+            () -> result = parser.parse("FROM input TO out1, out2, out3"),
+            () -> assertEquals(expected, result)
+        );
+}
 ```
-
-- Method names: `should<Behavior>`
-- One logical focus per test; `@ParameterizedTest` for variant matrices
-
-## Layer-specific guidance
-
-**Code layer** — assert domain records, not parse trees:
-```java
-assertEquals(expectedStreamModel, parser.parse("FROM input TO out1, out2"));
-```
-
-**API layer** — assert SDK output matches parser for equivalent topology:
-```java
-assertEquals(parser.parse(dsl), Maestro.stream().from("input").to("output").build());
-```
-
-**Application layer** — Testcontainers for broker integration; unit-test pure topology builders without a broker.
-
-**Operator layer** — unit-test reconcile logic with fake clients; use envtest or mock K8s API for integration.
 
 ## Bug fixes
 
-Write a regression test that fails on the old behavior before applying the fix.
+Write a regression scenario that fails on the old behavior before applying the fix.

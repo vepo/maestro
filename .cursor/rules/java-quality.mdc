@@ -1,45 +1,362 @@
 ---
-description: Java coding standards for Maestro
+description: All Effective Java (3rd ed.) rules for Maestro Java code
 globs: "**/*.java"
 alwaysApply: false
 ---
 
 # Java Quality
 
-## Style
+**Source of truth:** *Effective Java* (Joshua Bloch, 3rd ed., 2018). All 90 items apply unless a Maestro note below says otherwise. When unsure, follow the book.
 
-- Match existing code: 4-space indent, `var` for obvious locals, records for immutable data
-- Prefer package-private types unless part of a layer's **public API** (SDK, operator entrypoints)
-- One public top-level type per file; name matches the file
+Modern Java additions used in Maestro: **records**, **sealed types**, **`var`**, **try-with-resources**, **Optional**.
 
-## Immutability
+---
 
-Domain and API types are immutable. Only infrastructure adapters hold mutable state (clients, caches).
+## Chapter 2 — Creating and Destroying Objects
+
+**Item 1 — Consider static factory methods instead of constructors**
+Use static factories when they improve readability, express semantics (`of`, `from`, `valueOf`), allow caching, or hide implementation. Maestro: domain factories on sealed interfaces — `Expression.and()`, `Literal.string()`.
+
+**Item 2 — Consider a builder when faced with many constructor parameters**
+Prefer a Builder over telescoping constructors or JavaBeans when a type has many optional parameters. Validate in `build()`; throw `IllegalArgumentException` with detail on failure.
+
+**Item 3 — Enforce the singleton property with a private constructor or an enum type**
+If a singleton is warranted, use a single-element **enum** (best), or a private constructor with a static instance. Do not use mutable singletons without thread-safe initialization.
+
+**Item 4 — Enforce noninstantiability with a private constructor**
+Utility classes (`Scenario`, `DomainFixtures`): `final` class, private constructor, static members only.
+
+**Item 5 — Prefer dependency injection to hardwiring resources**
+Pass dependencies via constructors or factories — do not create collaborators inside the class with `new` when they should be substitutable (configs, parsers, clients). Maestro: `MaestroApplication(StreamModel, MaestroConfigs)`.
+
+**Item 6 — Avoid creating unnecessary objects**
+Reuse immutable objects; cache expensive creations (e.g. compiled patterns). Prefer `Map.keySet()` views over copying. Do not create object pools except for very expensive resources.
+
+**Item 7 — Eliminate obsolete object references**
+Clear references when no longer needed (e.g. pop from stacks, remove from collections). Watch caches, listeners, and callbacks for memory leaks; prefer weak references when appropriate.
+
+**Item 8 — Avoid finalizers and cleaners**
+Do not use finalizers or cleaners for resource management. Use **`AutoCloseable`** and explicit `close()` — Maestro: `MaestroApplication implements AutoCloseable`.
+
+**Item 9 — Prefer try-with-resources to try-finally**
+Always close resources with try-with-resources (`KafkaProducer`, `KafkaConsumer`, streams, files). Prefer over nested try-finally.
+
+---
+
+## Chapter 3 — Methods Common to All Objects
+
+**Item 10 — Obey the general contract when overriding equals**
+Override `equals` only for value classes needing logical equality. Obey reflexivity, symmetry, transitivity, consistency, and non-nullity. Prefer composition over inheritance when adding value components. **Records:** generated `equals` satisfies the contract — do not hand-roll unless necessary.
+
+**Item 11 — Always override hashCode when you override equals**
+Every class overriding `equals` must override `hashCode` consistently. **Records:** generated `hashCode` satisfies this automatically.
+
+**Item 12 — Always override toString**
+Provide a useful `toString` for value classes to aid debugging. **Records:** default is usually sufficient; customize when domain names matter. Skip for static utility classes and enums.
+
+**Item 13 — Override clone judiciously**
+Avoid `Cloneable` and `clone()`. Prefer copy constructors or static factory copy methods.
+
+**Item 14 — Consider implementing Comparable**
+Implement `Comparable` when a natural ordering exists. Use `Integer.compare`, `Comparator.comparing`, etc. — not relational operators on boxed types.
+
+---
+
+## Chapter 4 — Classes and Interfaces
+
+**Item 15 — Minimize the accessibility of classes and members**
+Make each class and member as inaccessible as possible. Package-private by default in Maestro; public only for layer API. Never expose mutable objects via `public static final`. Test-only relaxation: at most package-private, not public.
+
+**Item 16 — In public classes, use accessor methods, not public fields**
+No public fields in public API types. **Records** expose components via accessors — acceptable for immutable data carriers.
+
+**Item 17 — Minimize mutability**
+Prefer immutable types. **Records** are the default for domain/API (`parser.model`). Mutable state only in infrastructure adapters. Defensive-copy mutable components on input; never expose mutable internals.
+
+**Item 18 — Favor composition over inheritance**
+Prefer composition and forwarding over subclassing concrete classes. Maestro: sealed `Expression` / `ProcessingStage` hierarchies instead of deep inheritance trees.
+
+**Item 19 — Design and document for inheritance or else prohibit it**
+Do not subclass unless designed for it. **Sealed** types and `final` classes prohibit unsafe extension. Never call overridable methods from constructors.
+
+**Item 20 — Prefer interfaces to abstract classes**
+Define capabilities with interfaces. Maestro: program to `Expression`, `ProcessingStage`, `Literal`.
+
+**Item 21 — Design interfaces for posterity**
+Interfaces are permanent contracts — design for evolution (default methods sparingly; document behavior).
+
+**Item 22 — Use interfaces only to define types**
+Do not use interfaces purely as constant holders or utility namespaces — use classes (Item 4).
+
+**Item 23 — Prefer class hierarchies to tagged classes**
+Replace type-tag fields with sealed class/interface hierarchies. Maestro: `ProcessingStage` permits known stage records.
+
+**Item 24 — Favor static member classes over nonstatic**
+Use static nested classes unless the nested class needs enclosing instance access. Avoid nonstatic inner classes in public API.
+
+**Item 25 — Limit source files to a single top-level class**
+One public top-level type per file; filename matches the type name.
+
+---
+
+## Chapter 5 — Generics
+
+**Item 26 — Don't use raw types**
+Never use raw generic types. Always parameterize `List`, `Map`, `Optional`, etc.
+
+**Item 27 — Eliminate unchecked warnings**
+Fix or `@SuppressWarnings("unchecked")` only with minimal scope and comment justifying safety (e.g. varargs bridges).
+
+**Item 28 — Prefer lists to arrays**
+Prefer `List<E>` over arrays for public APIs. Use `List.of`, `toList()` for immutable lists.
+
+**Item 29 — Favor generic types**
+Define generic types when type parameters improve safety and clarity (`Stack<T>`, not `Stack` of `Object`).
+
+**Item 30 — Favor generic methods**
+Use generic methods and type inference (`<T> T requireNonNull(T obj)`) over raw casts.
+
+**Item 31 — Use bounded wildcards to increase API flexibility**
+Use `? extends T` for producers, `? super T` for consumers (PECS). Apply to public API parameters and return types.
+
+**Item 32 — Combine generics and varargs judiciously**
+Varargs on generic types can be unsafe; prefer `List<T>` arguments. If varargs are required, document and suppress carefully.
+
+**Item 33 — Consider typesafe heterogeneous containers**
+Use `Class<?>` keys (e.g. `Map<Class<?>, Object>`) when one container must hold multiple types safely — rare; prefer typed fields.
+
+---
+
+## Chapter 6 — Enums and Annotations
+
+**Item 34 — Use enums instead of int constants**
+Use enums for fixed sets of constants. Maestro: `ComparisonOperator`, `WindowType`, `LogicalOperator` — no magic strings or int codes.
+
+**Item 35 — Use instance fields instead of ordinals**
+Never use `ordinal()` for business logic. Store associated data as enum instance fields.
+
+**Item 36 — Use EnumSet instead of bit fields**
+Use `EnumSet` for sets of enum constants — not manual bit masks.
+
+**Item 37 — Use EnumMap instead of ordinal indexing**
+Use `EnumMap` for enum-keyed maps — not arrays indexed by `ordinal()`.
+
+**Item 38 — Emulate extensible enums with interfaces**
+When enum constants need polymorphic behavior, implement interfaces on enum constants (rare).
+
+**Item 39 — Prefer annotations to naming patterns**
+Use `@Override`, `@Deprecated`, `@SafeVarargs`, etc. — not naming conventions alone.
+
+**Item 40 — Consistently use the Override annotation**
+Mark every intended method override with `@Override` — catches typos at compile time.
+
+**Item 41 — Use marker interfaces to define types**
+Use marker interfaces (e.g. `Serializable`) sparingly; prefer annotations or explicit API contracts.
+
+---
+
+## Chapter 7 — Lambdas and Streams
+
+**Item 42 — Prefer lambdas to anonymous classes**
+Use lambdas for functional interfaces unless you need multiple methods or stateful anonymous classes.
+
+**Item 43 — Prefer method references to lambdas**
+Use method references (`records::add`, `Type::method`) when they are clearer than lambdas.
+
+**Item 44 — Favor the use of standard functional interfaces**
+Use `Predicate`, `Function`, `Consumer`, `Supplier` from `java.util.function` — do not define one-off functional interfaces when standard ones fit.
+
+**Item 45 — Use streams judiciously**
+Streams for transforms and aggregations; prefer simple loops when clearer or when performance matters on small collections.
+
+**Item 46 — Prefer side-effect-free functions in streams**
+Keep stream pipelines pure; perform I/O and mutation outside the pipeline (in `.run()` actions in tests).
+
+**Item 47 — Prefer Collection to Stream as a return type**
+Return `Collection`, `List`, or `Set` — not `Stream` — from public methods. Streams are for internal computation.
+
+**Item 48 — Use caution when making streams parallel**
+Do not use parallel streams by default. Parallelize only when measured benefit exists and operations are side-effect-free.
+
+---
+
+## Chapter 8 — Methods
+
+**Item 49 — Check parameters for validity**
+Validate constructor and method parameters early. Use `Objects.requireNonNull`; throw `NullPointerException` or `IllegalArgumentException` with detail. Validate in parser/builder layers — not inside records.
+
+**Item 50 — Make defensive copies when needed**
+Defensive-copy mutable inputs in constructors and accessors. Use `List.copyOf`, `Stream.toList()` in records.
+
+**Item 51 — Design method signatures carefully**
+Keep methods focused; avoid long parameter lists (use builder or value object). Use overloading only when truly clearer.
+
+**Item 52 — Use overloading judiciously**
+Do not overload methods where calls could be ambiguous. Record convenience constructors (e.g. `Query(..., String... sinkTopics)`) are OK when unambiguous.
+
+**Item 53 — Use varargs judiciously**
+Use varargs for trailing arguments of the same type (`String... sinkTopics`). Never use varargs with generic types unsafely (Item 32).
+
+**Item 54 — Return empty collections or arrays, not nulls**
+Return `List.of()`, `Set.of()`, `Optional.empty()` — never `null` collections or arrays from public methods.
+
+**Item 55 — Return optionals judiciously**
+Use `Optional` for optional return values (`SourceStage.whereClause`). Do not use Optional for fields, parameters, collections, or as a general null substitute.
+
+**Item 56 — Write doc comments for all exposed API elements**
+Document every public/protected member of exported API types (SDK, operator, `StreamTopologyParser`) with `{@code}`, `@param`, `@return`, `@throws`.
+
+---
+
+## Chapter 9 — General Programming
+
+**Item 57 — Minimize the scope of local variables**
+Declare variables in the smallest scope; use `var` when the type is obvious from the initializer.
+
+**Item 58 — Prefer for-each loops to traditional for loops**
+Use enhanced for over index loops when iteration order follows the collection.
+
+**Item 59 — Know and use the libraries**
+Prefer JDK utilities (`Objects`, `List.of`, `Map.of`, `EnumSet`, AssertJ in tests) over reinventing. Know Kafka/Jackson/ANTLR APIs before wrapping them.
+
+**Item 60 — Avoid float and double if exact answers are required**
+Use `BigDecimal` for exact decimal arithmetic — not `float` or `double` for money or precise values.
+
+**Item 61 — Prefer primitive types to boxed primitives**
+Use primitives locally when null is not needed; boxed types for generics and collections only.
+
+**Item 62 — Avoid strings where other types are more appropriate**
+Model domain concepts as types (records, enums) — not strings. Maestro: stages and expressions are records, not `String` blobs.
+
+**Item 63 — Beware the performance of string concatenation**
+Do not concatenate strings repeatedly in loops; use `StringBuilder`. In logging, use SLF4J `{}` placeholders — not concatenation.
+
+**Item 64 — Refer to objects by their interfaces**
+Declare fields, parameters, and return types as interface types (`List`, `Map`, `Expression`) — not concrete implementations.
+
+**Item 65 — Prefer interfaces to reflection**
+Avoid reflection in normal code paths. Use interfaces, generics, and method references.
+
+**Item 66 — Use native methods judiciously**
+Avoid JNI unless strictly required — not applicable to typical Maestro code.
+
+**Item 67 — Optimize judiciously**
+Measure before optimizing. Prefer clear code over premature micro-optimization.
+
+**Item 68 — Adhere to generally accepted naming conventions**
+Types: `UpperCamelCase`. Methods/fields: `lowerCamelCase`. Constants: `UPPER_SNAKE_CASE`. Packages: lowercase (`dev.vepo.maestro.parser.model`). Test methods: `shouldBehavior`.
+
+---
+
+## Chapter 10 — Exceptions
+
+**Item 69 — Use exceptions only for exceptional conditions**
+Do not use exceptions for ordinary control flow. Do not catch `Exception`, `Throwable`, or `RuntimeException` broadly without rethrowing.
+
+**Item 70 — Use checked exceptions for recoverable conditions and runtime exceptions for programming errors**
+Checked for recoverable failures callers can handle; unchecked (`IllegalArgumentException`, `IllegalStateException`) for bugs and invalid API use.
+
+**Item 71 — Avoid unnecessary use of checked exceptions**
+Do not wrap unchecked exceptions in checked ones without adding value. Prefer unchecked for API precondition violations.
+
+**Item 72 — Favor the use of standard exceptions**
+Use JDK exceptions (`IllegalArgumentException`, `IllegalStateException`, `UnsupportedOperationException`, `IndexOutOfBoundsException`) — not ad-hoc types unless domain-specific.
+
+**Item 73 — Throw exceptions appropriate to the abstraction**
+Wrap lower-level exceptions in higher-level abstractions with context; do not leak implementation details (Kafka/K8s types in domain exceptions).
+
+**Item 74 — Document all exceptions thrown by each method**
+Document checked exceptions and significant unchecked exceptions in Javadoc `@throws`.
+
+**Item 75 — Include failure-capture information in detail messages**
+Exception messages must include failure context: field name, token, query index, topic name — not generic text.
+
+**Item 76 — Strive for failure atomicity**
+Methods should leave objects in a consistent state on failure. Prefer validation before mutation; use transactions or two-phase changes where needed.
+
+**Item 77 — Don't ignore exceptions**
+Never swallow exceptions in empty `catch` blocks. Log with cause and rethrow, or handle meaningfully.
+
+---
+
+## Chapter 11 — Concurrency
+
+**Item 78 — Synchronize access to shared mutable data**
+Guard shared mutable state with `synchronized`, locks, or concurrent collections. Maestro: `MaestroApplication.start()` is synchronized.
+
+**Item 79 — Avoid excessive synchronization**
+Hold locks for minimal time; do not call alien methods while holding locks. Prefer concurrent utilities over hand-rolled wait/notify.
+
+**Item 80 — Prefer executors, tasks, and streams to threads**
+Use `ExecutorService` and task abstractions — do not manage raw `Thread` objects in application code.
+
+**Item 81 — Prefer concurrency utilities to wait and notify**
+Use `CountDownLatch`, `ConcurrentHashMap`, `BlockingQueue`, etc. — not `wait`/`notify` directly.
+
+**Item 82 — Document thread safety**
+Document thread-safety guarantees of public API types. Assume non-thread-safe unless documented otherwise.
+
+**Item 83 — Use lazy initialization judiciously**
+Use lazy init for expensive fields; use static holder idiom or `enum` singleton for static lazy init. Prefer eager init when cost is low.
+
+**Item 84 — Don't depend on the thread scheduler**
+Do not rely on thread priority, `yield`, or scheduling timing for correctness. Use proper synchronization and `java.util.concurrent`.
+
+---
+
+## Chapter 12 — Serialization
+
+**Item 85 — Prefer alternatives to Java serialization**
+Avoid Java serialization for new designs. Prefer JSON (Jackson 3), protobuf, or domain records — Maestro: `StreamModel` as contract, not serialized Java graphs.
+
+**Item 86 — Implement Serializable with great caution**
+Do not implement `Serializable` on domain types unless required. Serialization is a permanent API commitment.
+
+**Item 87 — Consider using a custom serialized form**
+If serialization is required, define explicit serialized form — do not rely on default serialization of mutable objects.
+
+**Item 88 — Write readObject methods defensively**
+Validate and defensively copy in `readObject` — never deserialize into trusting mutable singletons.
+
+**Item 89 — For instance control, prefer enum types to readResolve and writeReplace**
+Use enum singletons for instance control — not `readResolve`/`writeReplace` hacks.
+
+**Item 90 — Consider serialization proxies instead of serialized instances**
+Use serialization proxy pattern when serialization is unavoidable — keeps implementation details out of serialized stream.
+
+---
+
+## Maestro project conventions (in addition to Effective Java)
+
+These refine the book for this codebase — they do not replace Items 1–90.
+
+### Style
+- **4-space indent** (no tabs); match surrounding module style; no drive-by reformatting
+- SLF4J with `{}` placeholders; no `System.out.println` in production or tests
+
+### Layer dependencies
+- `parser.model` — JDK only (Items 17, 62: pure immutable value objects)
+- Code layer infra — SLF4J + ANTLR OK; no Kafka
+- Application layer — Kafka at boundary; **Jackson 3** (`tools.jackson.databind`, not `com.fasterxml.jackson`)
+- Operator layer — K8s client at boundary; reconcile on domain types
+
+### Public API (SDK / operator)
+- Minimal surface (Item 15): expose `StreamModel` and fluent builders — not `StreamQueriesBuilder`
+- Method names follow Stream Language vocabulary (`from`, `filter`, `to`)
+
+### Canonical patterns in this repo
 
 ```java
-// ✅ GOOD — shared across all layers
-public record Query(SourcePipeline sourcePipeline, List<String> sinkTopics) {}
+// Items 1, 17, 34, 64 — factories, immutability, enums, interfaces
+Expression.and(Literal.string("a"), FieldReferenceExpression.of("status"));
 
-// ❌ BAD — mutable domain object
-public class Query { private List<String> sinks; public void addSink(String s) { ... } }
+// Item 4 — utility class
+final class DomainFixtures {
+    private DomainFixtures() { }
+}
+
+// Item 9 — resource management
+try (var app = new MaestroApplication(model, configs)) {
+    app.start();
+}
 ```
-
-## Dependencies
-
-- `parser.model` — JDK only; no Kafka, ANTLR, Jackson, SLF4J, or K8s
-- Code layer — no Kafka runtime dependencies
-- Application layer — Kafka at the boundary; do not expose Kafka types in public API
-- Operator layer — K8s client at the boundary; reconcile logic works on domain types
-- Constructor injection; no static mutable state
-- SLF4J with `{}` placeholders where logging is used
-
-## Error handling
-
-- Fail fast with clear messages; do not swallow exceptions
-- Domain validation errors are distinct from infrastructure failures
-- Use `Objects.requireNonNull` at layer boundaries
-
-## Public API (SDK / operator)
-
-- Minimal surface; expose `StreamModel` and fluent builders, not internal parsers or K8s helpers
-- Stable method names aligned with Stream Language vocabulary (`from`, `filter`, `to`, not Kafka jargon)

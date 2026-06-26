@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Test Coverage
 
-Every change to production code (`src/main/java`) must include or update tests in the same module.
+Every change to production code (`src/main/java`) must include or update tests in the same module. New tests must follow `testing-dsl.mdc` (Given/When/Then scenarios in domain language).
 
 ## By change type
 
@@ -26,6 +26,8 @@ Every change to production code (`src/main/java`) must include or update tests i
 | **API** (`maestro-api`) | Builder output equals parser output for same topology |
 | **Application** (`maestro-engine`, …) | Topology wiring, serde, config, lifecycle (start/stop/state) |
 | **Operator** (`maestro-operator`, …) | Spec → model mapping, reconcile actions, status updates |
+
+Parser tests are the canonical Stream Language examples. Do not treat `@Disabled` engine tests as syntax reference.
 
 ## What not to count as coverage
 

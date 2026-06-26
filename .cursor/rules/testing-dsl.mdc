@@ -1,0 +1,70 @@
+---
+description: Gherkin-like test DSL and domain language for Maestro tests
+globs: "**/src/test/**/*.java"
+alwaysApply: false
+---
+
+# Testing DSL
+
+Every **new or modified** test is a **scenario** in domain language: **Given → When → Then** via `Scenario.given()`.
+
+Legacy tests without Scenario may remain until touched — then migrate.
+
+## Required structure
+
+```java
+@Test
+void shouldPassThroughRecordsFromSourceToSink() {
+    given("a Stream Application with a passthrough Query from orders to shipments")
+        .when("3 records are published to the source topic")
+        .then("all 3 records appear on the sink topic unchanged")
+        .run(
+            () -> { /* start Stream Application */ },
+            () -> publishTo(sourceTopic("orders"), bootstrap).json("{...}").records(),
+            () -> expectOn(sinkTopic("shipments"), bootstrap).received(3).records().assertThat(...)
+        );
+}
+```
+
+Test method names: `should<Behavior>`. Scenario strings use domain terms only.
+
+## Canonical DSL for test data
+
+**Stream Language strings in tests must match `Stream.g4`.** Source of truth:
+
+1. `maestro-parser/src/main/antlr4/.../Stream.g4`
+2. Parser tests in `maestro-parser/src/test`
+
+**Do not copy DSL from `@Disabled` engine tests** — they use aspirational syntax (e.g. `FILTER WHERE`, `GROUP BY`, `MAP SET`) not in the grammar.
+
+## Helpers
+
+| Helper | Module | Role |
+|--------|--------|------|
+| `Scenario` | parser, engine | Given/When/Then scaffold |
+| `DomainFixtures` | parser | `streamModel()`, `query()`, `sourcePipeline()` |
+| `StreamTestDSL` | engine | `sourceTopic()`, `sinkTopic()`, `publishTo()`, `expectOn()` |
+| `SendDSL` / `VerifyDSL` | engine | Low-level publish/assert (use via `StreamTestDSL`) |
+
+Prefer `DomainFixtures` over verbose inline `new StreamModel(new Query(...))`.
+
+## Anti-patterns
+
+```java
+// ❌ bundled scenarios — one behavior per @Test
+void parserTest() { /* many unrelated asserts */ }
+
+// ❌ infrastructure in scenario text
+given("a KafkaProducer sends to topic input")
+
+// ❌ invalid grammar from disabled tests
+parser.parse("FROM input |> FILTER WHERE status = 'active' TO output")
+
+// ✅ domain scenario + grammar-valid DSL
+given("a Query with a FilterStage on status")
+    .when("the Stream Language is parsed")
+    .then("the StreamModel contains a FilterStage")
+    .run(...);
+```
+
+One `@Test` = one behavior. Use `@Disabled("awaiting engine FilterStage wiring")` with a comment when blocked on implementation.

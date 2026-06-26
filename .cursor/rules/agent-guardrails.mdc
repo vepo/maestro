@@ -1,0 +1,40 @@
+---
+description: Agent guardrails — pitfalls when using AI to change Maestro
+alwaysApply: true
+---
+
+# Agent Guardrails
+
+Read `AGENTS.md` before any change. Run `mvn verify` before finishing.
+
+## Never do
+
+| Action | Why | Do instead |
+|--------|-----|------------|
+| Edit `StreamLexer.java`, `StreamParser.java`, `StreamBaseListener.java` | ANTLR-generated under `target/` | Edit `Stream.g4`; run `mvn -pl maestro-parser generate-sources` |
+| Add Kafka/Jackson/SLF4J imports to `parser.model` | Domain is JDK-only | Keep infra in parser or engine packages |
+| Copy DSL from `@Disabled` engine tests | Syntax is aspirational, not in grammar | Use parser tests + `Stream.g4` as canonical |
+| Use `com.fasterxml.jackson` | Project uses Jackson 3 | `tools.jackson.databind` |
+| Regex or hand-parse Stream Language | Bypasses grammar and model | ANTLR grammar → `StreamQueriesBuilder` → records |
+| Fork parallel topology schema (JSON/YAML maps) | Breaks layer contract | Deserialize to `StreamModel` |
+| Make test classes `public` | Project convention | Package-private `class FooTest` |
+| Drive-by refactors | Scope creep | Change only what the task requires |
+
+## Always do
+
+- **Layer check:** identify API / Code / Application / Operator impact before coding
+- **Change order:** grammar → builder → model record → parser test → engine wiring
+- **Canonical DSL:** `maestro-parser/src/main/antlr4/.../Stream.g4` + parser tests in `maestro-parser/src/test`
+- **New tests:** `Scenario.given().when().then().run()` + domain language (see `testing-dsl.mdc`)
+- **Preferred engine entry:** `MaestroApplication(StreamModel, MaestroConfigs)` — String constructor is CLI/bootstrap only
+- **Verify:** `mvn verify` (or module-scoped test) after production changes
+
+## Engine MVP (current state)
+
+`MaestroApplication.start()` implements **passthrough only** (source topic → sink topic). Parser model supports many stages; engine wiring is incremental. Do not assume disabled engine tests reflect implemented behavior.
+
+## When unsure
+
+1. Read the relevant `.cursor/rules/*.mdc` file for the layer you touch
+2. Find an existing test that covers similar grammar or behavior
+3. Match its patterns — do not invent new DSL syntax

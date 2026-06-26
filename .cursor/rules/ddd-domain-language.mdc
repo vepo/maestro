@@ -27,6 +27,8 @@ Maestro is a **deployment framework**, not just a parser. Use framework terms al
 - **SourcePipeline** / **SourceStage** — input topics and upstream stages
 - **Stage** — Filter, Project, Join, Window, Aggregate, Transform, Flatten, UniqueBy, …
 - **Expression** / **Predicate** — WHERE clause tree
+- **SourceStage WHERE** — filter on source topics (`FROM topic WHERE …`)
+- **FilterStage** — pipeline filter (`|> WHERE …`)
 
 Avoid leaking infrastructure names (`ParseTree`, `StreamsBuilder`, `Pod`, `Deployment`) into domain types.
 
@@ -39,7 +41,7 @@ Avoid leaking infrastructure names (`ParseTree`, `StreamsBuilder`, `Pod`, `Deplo
 
 ```java
 // ✅ GOOD — domain type usable by every layer
-public record FilterStage(Expression predicate) implements ProcessingStage {}
+public record FilterStage(Expression condition) implements ProcessingStage {}
 
 // ❌ BAD — K8s or Kafka concern in domain
 public record FilterStage(Expression predicate, String consumerGroup) {}
@@ -54,7 +56,9 @@ public record FilterStage(Expression predicate, String consumerGroup) {}
 | Application | `StreamModel` → Kafka Streams topology |
 | Operator | K8s CR spec → `StreamModel`; drives application deployment |
 
-Never re-parse DSL strings at runtime in the application or operator layer — work from `StreamModel`.
+Never re-parse DSL strings at runtime in application or operator logic — work from `StreamModel`.
+
+Exception: `MaestroApplication(String, MaestroConfigs)` parses once at bootstrap/CLI; prefer `MaestroApplication(StreamModel, MaestroConfigs)` elsewhere.
 
 ## Naming
 

@@ -1,0 +1,44 @@
+---
+description: Maven multi-module conventions for Maestro
+globs: "**/pom.xml"
+alwaysApply: false
+---
+
+# Maven Modules
+
+## Parent (`maestro-parent`)
+
+- Java 25: `maven.compiler.source` / `target`
+- Shared test deps inherited by all modules: JUnit 5, AssertJ, Awaitility, Testcontainers, Logback (test)
+- Version properties: `${version.kafka}` for Kafka artifacts
+- New modules: add to `<modules>` in parent `pom.xml`
+
+## Module rules
+
+| Module | Layer | Key deps | Plugins |
+|--------|-------|----------|---------|
+| `maestro-parser` | Code | `antlr4-runtime` only | `antlr4-maven-plugin` |
+| `maestro-engine` | Application | `maestro-parser`, Kafka, Jackson 3 | — |
+| `maestro-api` | API | `maestro-parser` | — |
+| `maestro-operator` | Operator | application + K8s client | — |
+
+- Internal deps: `${project.version}` (e.g. `maestro-parser`)
+- Do not add Kafka to `maestro-parser`
+- Do not redeclare parent test deps unless module-specific (e.g. `testcontainers-kafka` in engine)
+- Package naming: `dev.vepo.maestro.<module>`
+
+## Commands
+
+```bash
+mvn verify                           # full build
+mvn -pl maestro-parser test          # code layer only
+mvn -pl maestro-engine test          # application layer only
+mvn -pl maestro-parser generate-sources   # after Stream.g4 changes
+```
+
+## Adding a module
+
+1. Create directory with layer-appropriate `pom.xml` (parent = `maestro-parent`)
+2. Register in parent `<modules>`
+3. Dependencies point **down** the layer stack only
+4. Add `AGENTS.md` module row if it is a new deployment layer entry point

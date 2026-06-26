@@ -57,6 +57,7 @@ When adding a module, place it under the correct layer, declare dependencies onl
 ## Tech stack
 
 - Java 25, Maven multi-module
+- Coding standards: *Effective Java* 3rd ed. — all 90 items in `java-quality.mdc`
 - ANTLR 4 (Stream Language), Apache Kafka Streams 4.x (runtime)
 - JUnit 5, AssertJ, Awaitility, Testcontainers (tests)
 - Kubernetes / Java Operator SDK (planned, operator layer)
@@ -112,30 +113,51 @@ Prefer domain names over infrastructure jargon in model and API code. Map to Kaf
 
 ## Development workflow
 
-1. **TDD** — write or extend a failing test first, then implement the minimum code to pass
-2. **Layer-aware changes** — identify which deployment layer is affected; keep domain changes in `parser.model` and propagate upward
-3. **Small diffs** — one concern per change; match existing style (records, `var`, package-private tests)
-4. **Coverage** — new behavior needs tests; bug fixes need a regression test
-5. **No drive-by refactors** — do not rename or restructure unrelated code
+1. **Read guardrails** — follow `agent-guardrails.mdc` (always applied)
+2. **TDD** — write or extend a failing test first, then implement the minimum code to pass
+3. **Layer-aware changes** — identify which deployment layer is affected; keep domain changes in `parser.model` and propagate upward
+4. **Small diffs** — one concern per change; match existing style (records, `var`, package-private tests)
+5. **Coverage** — new behavior needs tests; bug fixes need a regression test
+6. **No drive-by refactors** — do not rename or restructure unrelated code
+7. **Verify** — run `mvn verify` before finishing
+
+## Agent pitfalls (quick reference)
+
+| Pitfall | Safe approach |
+|---------|---------------|
+| Edit generated ANTLR files | Edit `Stream.g4` only |
+| Copy DSL from disabled engine tests | Use parser tests + grammar |
+| Jackson 2 imports | Jackson 3: `tools.jackson.databind` |
+| Kafka types in `parser.model` | JDK-only domain |
+| Skip Scenario DSL in new tests | `Scenario.given().when().then().run()` |
+| Assume engine runs all stages | Passthrough only today — see `engine-runtime.mdc` |
 
 ## Test conventions
 
+Every test is a **Gherkin-like scenario** in **domain language** — see `testing-dsl.mdc` for full rules.
+
+- Structure: **Given → When → Then** via `Scenario.given(…).when(…).then(…).run(…)`
 - Test classes: package-private, suffix `Test`, method names `should…`
-- **Code layer:** assert full domain objects (`assertEquals` on records), not string fragments
-- **Application layer:** Testcontainers Kafka; AssertJ and Awaitility for async assertions
-- **API layer:** test that SDK output equals equivalent parser output for the same topology
-- **Operator layer:** unit-test reconciliation logic; use envtest or mock K8s client for integration
-- Test DSL helpers live in test sources (`SendDSL`, `VerifyDSL`)
+- Scenario strings use domain terms (Query, source topic, sink topic, StreamModel) — not Kafka/K8s jargon
+- **Code layer:** `DomainFixtures` for expected models; assert on `StreamModel` records
+- **Application layer:** `StreamTestDSL` + `SendDSL` / `VerifyDSL`; Testcontainers Kafka
+- **API layer:** SDK output equals equivalent Stream Language parse
+- **Operator layer:** Given desired state, When reconcile, Then synced status
 
 ## Cursor rules
 
-Project rules live in `.cursor/rules/`:
+Project rules live in `.cursor/rules/`. **`agent-guardrails.mdc` always applies.**
 
 | Rule | Focus |
 |------|-------|
+| `agent-guardrails.mdc` | AI agent pitfalls — always read first |
 | `architecture.mdc` | Deployment layers, module boundaries, dependency rules |
-| `java-quality.mdc` | Java style, immutability, logging, error handling |
+| `antlr-grammar.mdc` | Stream.g4, canonical syntax, builder pipeline |
+| `engine-runtime.mdc` | Engine MVP scope, Jackson 3, entry points |
+| `maven-modules.mdc` | Module layout, pom conventions |
+| `java-quality.mdc` | All 90 Effective Java items + Maestro layer conventions |
 | `tdd.mdc` | Red-green-refactor workflow |
+| `testing-dsl.mdc` | Gherkin-like scenario DSL and domain language in tests |
 | `test-coverage.mdc` | Coverage expectations per layer |
 | `ddd-domain-language.mdc` | Domain model and ubiquitous language |
 
