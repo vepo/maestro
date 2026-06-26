@@ -23,6 +23,7 @@ Parsed to `StreamModel`, executed by Kafka Streams — the same definition works
 | Java developer | [Getting started — SDK](docs/getting-started.md#option-b--java-sdk) — `maestro-api` |
 | Platform / SRE | [Deployment](docs/deployment.md) — Docker, Kubernetes operator |
 | Contributor | [AGENTS.md](AGENTS.md) — architecture, tests, layer rules |
+| Contributor | [CONTRIBUTING.md](CONTRIBUTING.md) — setup, workflow, PR checklist |
 
 ## Why Maestro?
 
@@ -114,7 +115,7 @@ Stack: Java 25, Apache Kafka Streams 4.x, ANTLR 4, JUnit 5 + Testcontainers.
 
 ## Contributing
 
-See [AGENTS.md](AGENTS.md) for architecture, test conventions, and development workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, development workflow, and pull request guidelines. [AGENTS.md](AGENTS.md) has additional architecture detail for contributors and AI agents.
 
 ## Status
 
