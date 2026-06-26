@@ -1,0 +1,9 @@
+FROM ad_impressions
+|> WINDOW TUMBLING SIZE 1 HOUR
+|> JOIN ad_clicks ON impression_id = click_id WITHIN 30 MINUTES
+|> PROJECT
+   ad_id,
+   impression_time,
+   click_time,
+   time_to_click = click_time - impression_time
+|> TO ad_performance

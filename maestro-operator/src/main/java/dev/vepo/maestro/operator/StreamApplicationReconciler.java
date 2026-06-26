@@ -1,14 +1,14 @@
 package dev.vepo.maestro.operator;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import dev.vepo.maestro.crd.StreamApplication;
 import dev.vepo.maestro.parser.StreamTopologyParser;
+import dev.vepo.maestro.parser.model.BranchCase;
 import dev.vepo.maestro.parser.model.BranchStage;
-import dev.vepo.maestro.parser.model.PatternStage;
 import dev.vepo.maestro.parser.model.ProcessingStage;
-import dev.vepo.maestro.parser.model.SessionizeStage;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 
@@ -60,16 +60,22 @@ public final class StreamApplicationReconciler {
         try {
             var model = parser.parse(resource.getSpec().getPipeline());
             for (var query : model.queries()) {
-                for (ProcessingStage stage : query.sourcePipeline().processingStages()) {
-                    if (stage instanceof BranchStage || stage instanceof PatternStage || stage instanceof SessionizeStage) {
-                        return ReconcileResult.failed("Unsupported stage at runtime: " + stage.getClass().getSimpleName());
-                    }
-                }
+                validateStages(query.sourcePipeline().processingStages());
             }
             var deployment = buildDeployment(resource);
             return ReconcileResult.synced(deployment);
         } catch (RuntimeException ex) {
             return ReconcileResult.failed(ex.getMessage());
+        }
+    }
+
+    private void validateStages(List<ProcessingStage> stages) {
+        for (ProcessingStage stage : stages) {
+            if (stage instanceof BranchStage branch) {
+                for (BranchCase branchCase : branch.cases()) {
+                    validateStages(branchCase.stages());
+                }
+            }
         }
     }
 }

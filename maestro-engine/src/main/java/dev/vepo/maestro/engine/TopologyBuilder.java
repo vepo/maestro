@@ -3,18 +3,27 @@ package dev.vepo.maestro.engine;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.vepo.maestro.engine.aggregate.AggregateReducer;
 import dev.vepo.maestro.engine.expression.ExpressionEvaluator;
-import dev.vepo.maestro.parser.model.AggregateFunction;
+import dev.vepo.maestro.engine.join.JoinKeyPair;
+import dev.vepo.maestro.engine.pattern.PatternMatcherProcessor;
 import dev.vepo.maestro.parser.model.AggregateStage;
+import dev.vepo.maestro.parser.model.BranchCase;
 import dev.vepo.maestro.parser.model.BranchStage;
 import dev.vepo.maestro.parser.model.FilterStage;
 import dev.vepo.maestro.parser.model.GroupByStage;
@@ -28,6 +37,7 @@ import dev.vepo.maestro.parser.model.ProjectStage;
 import dev.vepo.maestro.parser.model.Query;
 import dev.vepo.maestro.parser.model.SessionizeStage;
 import dev.vepo.maestro.parser.model.StreamModel;
+import dev.vepo.maestro.parser.model.ToStage;
 import dev.vepo.maestro.parser.model.WindowStage;
 import dev.vepo.maestro.parser.model.WindowType;
 import tools.jackson.databind.JsonNode;
@@ -48,48 +58,131 @@ public final class TopologyBuilder {
         }
     }
 
+    private record WindowContext(WindowStage window, GroupByStage group, SessionizeStage session) {}
+
     private static final Logger logger = LoggerFactory.getLogger(TopologyBuilder.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static KStream<String, Object> aggregateSessionStream(
+                                                                  org.apache.kafka.streams.kstream.SessionWindowedKStream<String, Object> windowed,
+                                                                  AggregateStage aggregate) {
+        var agg = windowed.aggregate(
+                                     () -> (Object) MAPPER.createObjectNode(),
+                                     (key, value, aggregateNode) -> AggregateReducer.merge((ObjectNode) aggregateNode, asJson(value), aggregate.functions()),
+                                     (key, one, two) -> {
+                                         var merged = MAPPER.createObjectNode();
+                                         merged.setAll((ObjectNode) one);
+                                         AggregateReducer.merge(merged, merged, aggregate.functions());
+                                         return merged;
+                                     },
+                                     Materialized.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter()));
+        return agg.toStream().map((windowedKey, value) -> {
+            var finalized = AggregateReducer.finalizeAggregates((ObjectNode) value, aggregate.functions());
+            return new org.apache.kafka.streams.KeyValue<>(windowedKey.key(), finalized);
+        });
+    }
+
+    private static KStream<String, Object> aggregateTimeStream(
+                                                               org.apache.kafka.streams.kstream.TimeWindowedKStream<String, Object> windowed,
+                                                               AggregateStage aggregate) {
+        var agg = windowed.aggregate(
+                                     () -> (Object) MAPPER.createObjectNode(),
+                                     (key, value, aggregateNode) -> AggregateReducer.merge((ObjectNode) aggregateNode, asJson(value), aggregate.functions()),
+                                     Materialized.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter()));
+        return agg.toStream().map((windowedKey, value) -> {
+            var finalized = AggregateReducer.finalizeAggregates((ObjectNode) value, aggregate.functions());
+            return new org.apache.kafka.streams.KeyValue<>(windowedKey.key(), finalized);
+        });
+    }
+
     private static KStream<String, Object> applyAggregate(
                                                           KStream<String, Object> stream,
-                                                          WindowStage window,
-                                                          GroupByStage group,
+                                                          WindowContext context,
                                                           AggregateStage aggregate,
                                                           StreamsBuilder builder) {
+        GroupByStage group = context.group();
+        if (group == null && context.session() != null) {
+            group = new GroupByStage(context.session().fields());
+        }
+        if (group == null) {
+            throw new IllegalStateException("GROUP BY is required before AGGREGATE");
+        }
+        final var groupBy = group;
+        var grouped = stream.groupBy((key, value) -> groupKey(asJson(value), groupBy),
+                                     Grouped.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter()));
+        if (context.session() != null) {
+            var session = context.session();
+            var gap = Duration.ofMillis(session.gap().toMillis());
+            var grace = session.timeout().map(t -> Duration.ofMillis(t.toMillis())).orElse(gap);
+            return aggregateSessionStream(grouped.windowedBy(SessionWindows.ofInactivityGapAndGrace(gap, grace)), aggregate);
+        }
+        var window = context.window();
         if (window == null) {
             window = new WindowStage(WindowType.TUMBLING, new dev.vepo.maestro.parser.model.Duration(1, dev.vepo.maestro.parser.model.TimeUnit.MINUTES));
         }
-        var windowed = stream
-                             .groupBy((key, value) -> groupKey(asJson(value), group),
-                                      Grouped.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter()))
-                             .windowedBy(toKafkaWindow(window));
-        var agg = windowed.aggregate(
-                                     () -> (Object) MAPPER.createObjectNode(),
-                                     (key, value, aggregateNode) -> mergeAggregate((ObjectNode) aggregateNode, asJson(value), aggregate.functions()),
-                                     Materialized.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter()));
-        return agg.toStream().map((windowedKey, value) -> new org.apache.kafka.streams.KeyValue<>(windowedKey.key(), value));
+        return aggregateTimeStream(grouped.windowedBy(toKafkaWindow(window)), aggregate);
+    }
+
+    private static void applyBranch(KStream<String, Object> stream, BranchStage branch, StreamsBuilder builder) {
+        var priorConditions = new ArrayList<dev.vepo.maestro.parser.model.Expression>();
+        for (var branchCase : branch.cases()) {
+            KStream<String, Object> branchStream;
+            if (branchCase.condition().isPresent()) {
+                var condition = branchCase.condition().get();
+                branchStream = stream.filter((key, value) -> ExpressionEvaluator.matches(asJson(value), condition));
+                priorConditions.add(condition);
+            } else {
+                branchStream = stream.filter((key, value) -> priorConditions.stream().noneMatch(c -> ExpressionEvaluator.matches(asJson(value), c)));
+            }
+            var sinks = sinkTopics(branchCase.stages());
+            var processing = processingStages(branchCase.stages());
+            var result = processStages(branchStream, processing, builder);
+            applySinks(result, sinks);
+        }
     }
 
     private static KStream<String, Object> applyJoin(KStream<String, Object> stream, JoinStage join, StreamsBuilder builder) {
         var topic = join.sourceTopic().orElse(join.target());
-        if (join.kind() == JoinKind.LOOKUP_TABLE || join.kind() == JoinKind.STREAM) {
+        var keys = JoinKeyPair.fromCondition(join.condition());
+        if (join.kind() == JoinKind.LOOKUP_TABLE) {
             var table = builder.<String, Object>globalTable(topic);
-            return stream.join(table, (key, left) -> key, (left, right) -> {
-                var merged = MAPPER.createObjectNode();
-                if (left instanceof ObjectNode leftNode) {
-                    merged.setAll(leftNode);
-                } else if (left instanceof JsonNode leftJson && leftJson.isObject()) {
-                    leftJson.properties().forEach(e -> merged.set(e.getKey(), e.getValue()));
-                }
-                if (right instanceof JsonNode rightNode) {
-                    merged.set("join", rightNode);
-                }
-                return merged;
-            });
+            return stream.join(table,
+                               (key, value) -> joinKey(asJson(value), keys.leftField()),
+                               (left, right) -> mergeJoin(left, right, join.target()),
+                               Named.as("join-lookup-" + join.target()));
         }
-        return stream;
+        if (join.kind() == JoinKind.STREAM) {
+            var other = builder.<String, Object>stream(topic);
+            var leftStream = stream.selectKey((key, value) -> joinKey(asJson(value), keys.leftField()));
+            var rightStream = other.selectKey((key, value) -> joinKey(asJson(value), keys.rightField()));
+            return leftStream.join(rightStream,
+                                   (left, right) -> mergeJoin(left, right, join.target()),
+                                   JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ZERO),
+                                   StreamJoined.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter(), new JsonSerdeAdapter())
+                                               .withName("join-stream-" + join.target()));
+        }
+        var within = join.within().orElseThrow(() -> new IllegalStateException("WITHIN duration required for stream-stream join"));
+        var other = builder.<String, Object>stream(topic);
+        var joinWindows = JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(within.toMillis()), Duration.ZERO);
+        var leftStream = stream.selectKey((key, value) -> joinKey(asJson(value), keys.leftField()));
+        var rightStream = other.selectKey((key, value) -> joinKey(asJson(value), keys.rightField()));
+        return leftStream.join(rightStream,
+                               (left, right) -> mergeJoin(left, right, join.target()),
+                               joinWindows,
+                               StreamJoined.with(org.apache.kafka.common.serialization.Serdes.String(), new JsonSerdeAdapter(), new JsonSerdeAdapter())
+                                           .withName("join-within-" + join.target()));
+    }
+
+    private static KStream<String, Object> applyPattern(KStream<String, Object> stream, PatternStage pattern) {
+        return stream.process(() -> new PatternMatcherProcessor(pattern), Named.as("pattern-" + pattern.detectAlias()),
+                              PatternMatcherProcessor.STATE_STORE_NAME);
+    }
+
+    private static void applySinks(KStream<String, Object> stream, List<String> sinks) {
+        for (var sink : sinks) {
+            stream.to(sink);
+        }
     }
 
     private static JsonNode asJson(Object value) {
@@ -103,6 +196,7 @@ public final class TopologyBuilder {
     }
 
     public static void build(StreamModel model, StreamsBuilder builder) {
+        builder.addStateStore(PatternMatcherProcessor.stateStoreBuilder());
         for (var query : model.queries()) {
             buildQuery(query, builder);
         }
@@ -114,46 +208,11 @@ public final class TopologyBuilder {
 
         var where = query.sourcePipeline().sourceStage().whereClause();
         if (where.isPresent()) {
-            var condition = where.get();
-            stream = stream.filter((key, value) -> ExpressionEvaluator.matches(asJson(value), condition));
+            stream = stream.filter((key, value) -> ExpressionEvaluator.matches(asJson(value), where.get()));
         }
 
-        WindowStage pendingWindow = null;
-        GroupByStage pendingGroup = null;
-
-        for (var stage : query.sourcePipeline().processingStages()) {
-            if (stage instanceof FilterStage filter) {
-                stream = stream.filter((key, value) -> ExpressionEvaluator.matches(asJson(value), filter.condition()));
-            } else if (stage instanceof ProjectStage project) {
-                stream = stream.mapValues(value -> projectRecord(asJson(value), project));
-            } else if (stage instanceof MapStage map) {
-                stream = stream.mapValues(value -> ExpressionEvaluator.applyAssignments(asJson(value),
-                                                                                        map.assignments()
-                                                                                           .toArray(dev.vepo.maestro.parser.model.Assignment[]::new)));
-            } else if (stage instanceof WindowStage window) {
-                pendingWindow = window;
-            } else if (stage instanceof GroupByStage group) {
-                pendingGroup = group;
-            } else if (stage instanceof AggregateStage aggregate) {
-                stream = applyAggregate(stream, pendingWindow, pendingGroup, aggregate, builder);
-                pendingWindow = null;
-                pendingGroup = null;
-            } else if (stage instanceof JoinStage join) {
-                stream = applyJoin(stream, join, builder);
-            } else if (stage instanceof BranchStage) {
-                throw new UnsupportedStageException("BranchStage");
-            } else if (stage instanceof PatternStage) {
-                throw new UnsupportedStageException("PatternStage");
-            } else if (stage instanceof SessionizeStage) {
-                throw new UnsupportedStageException("SessionizeStage");
-            } else {
-                logger.warn("Skipping unsupported stage: {}", stage.getClass().getSimpleName());
-            }
-        }
-
-        for (var sink : query.sinkTopics()) {
-            stream.to(sink);
-        }
+        var result = processStages(stream, query.sourcePipeline().processingStages(), builder);
+        applySinks(result, query.sinkTopics());
         logger.info("Wired query {} -> {}", sourceTopic, query.sinkTopics());
     }
 
@@ -168,22 +227,76 @@ public final class TopologyBuilder {
         return String.join("|", parts);
     }
 
-    private static ObjectNode mergeAggregate(ObjectNode aggregateNode, JsonNode value, List<AggregateFunction> functions) {
-        for (var fn : functions) {
-            var alias = fn.alias().orElse(fn.type().name().toLowerCase());
-            if (fn.type() == AggregateFunction.AggregateFunctionType.COUNT) {
-                var current = aggregateNode.has(alias) ? aggregateNode.get(alias).asInt() : 0;
-                aggregateNode.put(alias, current + 1);
-            } else {
-                var field = fn.field();
-                var fieldValue = ExpressionEvaluator.fieldValue(value, field);
-                if (fn.type() == AggregateFunction.AggregateFunctionType.AVG || fn.type() == AggregateFunction.AggregateFunctionType.MAX
-                        || fn.type() == AggregateFunction.AggregateFunctionType.MIN) {
-                    aggregateNode.put(alias, fieldValue.asDouble());
+    private static String joinKey(JsonNode value, String field) {
+        var simpleField = field.contains(".") ? field.substring(field.lastIndexOf('.') + 1) : field;
+        return ExpressionEvaluator.fieldValue(value, simpleField).asText();
+    }
+
+    private static Object mergeJoin(Object left, Object right, String targetAlias) {
+        var merged = MAPPER.createObjectNode();
+        if (left instanceof ObjectNode leftNode) {
+            merged.setAll(leftNode);
+        } else if (left instanceof JsonNode leftJson && leftJson.isObject()) {
+            leftJson.properties().forEach(e -> merged.set(e.getKey(), e.getValue()));
+        }
+        if (right instanceof JsonNode rightNode) {
+            merged.set(targetAlias, rightNode);
+        }
+        return merged;
+    }
+
+    private static List<ProcessingStage> processingStages(List<ProcessingStage> stages) {
+        return stages.stream().filter(s -> !(s instanceof ToStage)).toList();
+    }
+
+    private static KStream<String, Object> processStages(
+                                                         KStream<String, Object> stream,
+                                                         List<ProcessingStage> stages,
+                                                         StreamsBuilder builder) {
+        WindowStage pendingWindow = null;
+        GroupByStage pendingGroup = null;
+        SessionizeStage pendingSession = null;
+
+        for (var stage : stages) {
+            if (stage instanceof FilterStage filter) {
+                stream = stream.filter((key, value) -> ExpressionEvaluator.matches(asJson(value), filter.condition()));
+            } else if (stage instanceof ProjectStage project) {
+                stream = stream.mapValues(value -> projectRecord(asJson(value), project));
+            } else if (stage instanceof MapStage map) {
+                stream = stream.mapValues(value -> ExpressionEvaluator.applyAssignments(asJson(value),
+                                                                                        map.assignments()
+                                                                                           .toArray(dev.vepo.maestro.parser.model.Assignment[]::new)));
+            } else if (stage instanceof WindowStage window) {
+                if (pendingWindow != null || pendingSession != null) {
+                    throw new IllegalStateException("Nested window definitions are not supported");
                 }
+                pendingWindow = window;
+            } else if (stage instanceof GroupByStage group) {
+                pendingGroup = group;
+            } else if (stage instanceof SessionizeStage session) {
+                pendingSession = session;
+                pendingWindow = null;
+            } else if (stage instanceof AggregateStage aggregate) {
+                stream = applyAggregate(stream, new WindowContext(pendingWindow, pendingGroup, pendingSession), aggregate, builder);
+                pendingWindow = null;
+                pendingGroup = null;
+                pendingSession = null;
+            } else if (stage instanceof JoinStage join) {
+                stream = applyJoin(stream, join, builder);
+            } else if (stage instanceof BranchStage branch) {
+                applyBranch(stream, branch, builder);
+                return stream;
+            } else if (stage instanceof PatternStage pattern) {
+                stream = applyPattern(stream, pattern);
+            } else if (!(stage instanceof ToStage)) {
+                logger.warn("Skipping unsupported stage: {}", stage.getClass().getSimpleName());
             }
         }
-        return aggregateNode;
+
+        if (pendingWindow != null || pendingGroup != null || pendingSession != null) {
+            throw new IllegalStateException("WINDOW, GROUP BY, or SESSIONIZE must be followed by AGGREGATE");
+        }
+        return stream;
     }
 
     private static Object projectRecord(JsonNode record, ProjectStage project) {
@@ -202,12 +315,19 @@ public final class TopologyBuilder {
         return result;
     }
 
+    private static List<String> sinkTopics(List<ProcessingStage> stages) {
+        return stages.stream()
+                     .filter(ToStage.class::isInstance)
+                     .flatMap(s -> ((ToStage) s).topics().stream())
+                     .toList();
+    }
+
     private static TimeWindows toKafkaWindow(WindowStage window) {
         var size = Duration.ofMillis(window.windowSize().toMillis());
         if (window.windowType() == WindowType.HOPPING && window.slideInterval().isPresent()) {
-            return TimeWindows.ofSizeAndGrace(size, Duration.ZERO).advanceBy(Duration.ofMillis(window.slideInterval().get().toMillis()));
+            return TimeWindows.ofSizeAndGrace(size, size).advanceBy(Duration.ofMillis(window.slideInterval().get().toMillis()));
         }
-        return TimeWindows.ofSizeAndGrace(size, Duration.ZERO);
+        return TimeWindows.ofSizeAndGrace(size, size);
     }
 
     private TopologyBuilder() {}

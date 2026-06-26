@@ -1,0 +1,6 @@
+FROM stock_ticks
+|> PATTERN
+   DROP = price < stop_loss,
+   REBOUND = price > take_profit WITHIN 5 MINUTES AFTER DROP
+|> DETECT AS volatility_event
+|> TO alerts

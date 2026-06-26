@@ -8,8 +8,8 @@ alwaysApply: false
 
 ## Scope (current)
 
-- **Implemented:** `TopologyBuilder` wires filter, project, map, window + group + aggregate, lookup/stream join, and passthrough `TO` sinks
-- **Parse-only (throws `UnsupportedStageException`):** `BranchStage`, `PatternStage`, `SessionizeStage`
+- **Implemented:** `TopologyBuilder` wires all 11 `ProcessingStage` types: filter, project, map, window + group + aggregate, sessionize + aggregate, lookup/stream/stream-within join, branch (recursive sub-pipelines), pattern (CEP via `PatternMatcherProcessor`), and `TO` sinks
+- **Helpers:** `AggregateReducer`, `JoinKeyPair`, `PatternMatcherProcessor` + state store
 - **Stub:** `MaestroMetrics` returns placeholder values
 
 Extend stage support in `TopologyBuilder` by walking `SourcePipeline.processingStages()` — do not re-parse DSL in engine logic.

@@ -18,14 +18,15 @@ FROM input_topic
 | Filter | `\|> FILTER WHERE predicate` | Keep records matching predicate |
 | Project | `\|> PROJECT fields: f1, f2` | Select fields from JSON values |
 | Map | `\|> MAP SET field = expr, ...` | Transform or add fields |
-| Window | `\|> WINDOW TUMBLING SIZE 5 MINUTES` | Tumbling, hopping, sliding, session |
+| Window | `\|> WINDOW TUMBLING SIZE 5 MINUTES` | Tumbling, hopping, sliding |
 | Group | `\|> GROUP BY field1, field2` | Required before aggregate |
-| Aggregate | `\|> AGGREGATE count(*) AS n, avg(x) AS m` | After window + group |
+| Aggregate | `\|> AGGREGATE count(*) AS n, avg(x) AS m` | After window or sessionize + group |
 | Join (lookup) | `\|> JOIN users ON orders.user_id = users.id LOOKUP TABLE 'users'` | KTable lookup |
 | Join (stream) | `\|> JOIN products ON ... STREAM 'topic'` | Stream-stream join |
-| Branch | `\|> BRANCH CASE WHEN ... THEN ... DEFAULT ...` | Parse-only in engine |
-| Pattern | `\|> PATTERN ... DETECT AS alias` | Parse-only in engine |
-| Sessionize | `\|> SESSIONIZE BY user_id GAP 30 MINUTES` | Parse-only in engine |
+| Join (within) | `\|> JOIN clicks ON impression_id = click_id WITHIN 30 MINUTES` | Windowed stream join |
+| Branch | `\|> BRANCH CASE WHEN ... \|> ... DEFAULT \|> ...` | Multi-branch routing |
+| Pattern | `\|> PATTERN ... DETECT AS alias` | CEP with WITHIN / AFTER |
+| Sessionize | `\|> SESSIONIZE BY user_id GAP 30 MINUTES` | Session windows before aggregate |
 
 Comments start with `--` and run to end of line.
 
@@ -45,7 +46,7 @@ FROM events
 |> WINDOW TUMBLING SIZE 5 MINUTES
 |> WINDOW HOPPING SIZE 10 MINUTES ADVANCE BY 5 MINUTES
 |> WINDOW SLIDING SIZE 30 SECONDS
-|> WINDOW SESSION GAP 15 MINUTES
+|> SESSIONIZE BY user_id GAP 15 MINUTES TIMEOUT 1 HOUR
 ```
 
 Units: `MILLISECONDS`, `SECONDS`, `MINUTES`, `HOURS`, `DAYS` (short forms `ms`, `s`, `m`, `h`, `d` also accepted).
@@ -69,9 +70,9 @@ The authoritative syntax is `maestro-parser/src/main/antlr4/dev/vepo/maestro/par
 | Stage category | Parser | Engine |
 |----------------|--------|--------|
 | Filter, project, map | yes | yes |
-| Window, group, aggregate | yes | yes (partial — see tests) |
-| Lookup / stream join | yes | yes (partial) |
-| Branch, pattern, sessionize | yes | no — `UnsupportedStageException` |
+| Window, group, aggregate | yes | yes |
+| Lookup / stream join | yes | yes |
+| Branch, pattern, sessionize | yes | yes |
 
 Full matrix: [samples.md — layer coverage](samples.md#layer-coverage-matrix).
 
@@ -88,7 +89,7 @@ FROM input_topic
 |> TO output_topic
 ```
 
-**Aggregation (parses; engine partial):**
+**Aggregation (engine-tested):**
 
 ```text
 FROM clickstream

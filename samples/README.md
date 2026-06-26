@@ -22,13 +22,17 @@ Create source and sink topics before starting (see each sample README).
 | Passthrough | [passthrough/](passthrough/) | yes | Copy records from input to output |
 | Filter active users | [filter-active-users/](filter-active-users/) | yes | Keep records where `status = 'active'` |
 | Project user fields | [project-user-fields/](project-user-fields/) | yes | Select `user_id`, `name`, `email` |
-| Orders enrichment | [orders-enrichment/](orders-enrichment/) | partial | Filter + sink; join stages parse |
-| Click analytics | [click-analytics/](click-analytics/) | partial | Tumbling window aggregation |
-| Branch events | [branch-events/](branch-events/) | parse-only | Multi-branch routing (not runtime-safe) |
+| Orders enrichment | [orders-enrichment/](orders-enrichment/) | yes | Lookup + stream joins with project |
+| Click analytics | [click-analytics/](click-analytics/) | yes | Tumbling window aggregation |
+| Sensor ETL | [sensor-etl/](sensor-etl/) | yes | Map, hopping window, post-aggregate filter |
+| Ad performance | [ad-performance/](ad-performance/) | yes | Stream-stream join with WITHIN |
+| Stock patterns | [stock-patterns/](stock-patterns/) | yes | CEP pattern detection |
+| Website sessions | [website-sessions/](website-sessions/) | yes | Sessionization + aggregates |
+| Branch events | [branch-events/](branch-events/) | yes | Multi-branch routing |
 | Kubernetes | [kubernetes/](kubernetes/) | — | `StreamApplication` CR example |
 | Java SDK | [sdk/](sdk/) | yes | Equivalent API builder code |
 
-**Legend:** *yes* = covered by `MaestroApplicationTest`; *partial* = parses and may run with limitations; *parse-only* = operator marks `Failed`, engine throws `UnsupportedStageException`.
+**Legend:** *yes* = covered by `MaestroApplicationTest` and catalog integration tests.
 
 ## Sample input data
 

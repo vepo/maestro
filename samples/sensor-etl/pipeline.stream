@@ -1,0 +1,14 @@
+FROM raw_sensor_data
+|> FILTER WHERE temperature IS NOT NULL AND status != 'error'
+|> MAP
+   SET normalized_temp = (temperature - 32) * 5/9,
+   timestamp = to_epoch_ms(timestamp)
+|> WINDOW HOPPING SIZE 10 MINUTES ADVANCE BY 5 MINUTES
+|> GROUP BY device_id, sensor_type
+|> AGGREGATE
+   avg(normalized_temp) AS avg_temp,
+   max(normalized_temp) AS max_temp,
+   min(normalized_temp) AS min_temp,
+   count(*) AS reading_count
+|> FILTER WHERE reading_count > 10
+|> TO device_analytics, alert_topic

@@ -1,3 +1,5 @@
 FROM orders
-|> FILTER WHERE status = 'active'
+|> JOIN users ON orders.user_id = users.id LOOKUP TABLE 'users'
+|> JOIN products ON orders.product_id = products.id STREAM 'product_updates'
+|> PROJECT enriched_order: order_id, user_name, product_name, quantity, price
 |> TO enriched_orders

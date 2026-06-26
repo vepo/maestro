@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import dev.vepo.maestro.parser.model.AggregateFunction;
 import dev.vepo.maestro.parser.model.AggregateStage;
 import dev.vepo.maestro.parser.model.Assignment;
+import dev.vepo.maestro.parser.model.BetweenPredicate;
 import dev.vepo.maestro.parser.model.BooleanLiteral;
 import dev.vepo.maestro.parser.model.BranchCase;
 import dev.vepo.maestro.parser.model.BranchStage;
@@ -187,6 +188,11 @@ public class StreamQueriesBuilder extends StreamBaseListener {
         } else {
             // parenthesized math — expression already on stack
         }
+    }
+
+    @Override
+    public void exitBetweenPredicate(StreamParser.BetweenPredicateContext ctx) {
+        expressions.push(new BetweenPredicate(fieldText(ctx.fieldName()), literalFromValue(ctx.value(0)), literalFromValue(ctx.value(1))));
     }
 
     @Override
@@ -459,6 +465,13 @@ public class StreamQueriesBuilder extends StreamBaseListener {
 
     public StreamModel getResult() {
         return result;
+    }
+
+    private Literal literalFromValue(StreamParser.ValueContext ctx) {
+        if (ctx.literal() != null) {
+            return buildLiteral(ctx.literal());
+        }
+        throw new IllegalArgumentException("BETWEEN bounds must be literals");
     }
 
     private String quotedTopic(StreamParser.QuotedTopicContext ctx) {

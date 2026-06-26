@@ -125,15 +125,15 @@ FROM website_activity
 | Sample pipeline | Parser | Engine | API | Operator |
 |-----------------|--------|--------|-----|----------|
 | Basic filter + project | yes | yes | yes | yes |
-| Aggregation (tumbling window) | yes | partial | partial | reconcile |
-| Stream enrichment (joins) | yes | partial | partial | reconcile |
-| Complex ETL (map + hopping + aggregate) | yes | partial | partial | reconcile |
-| Multi-branch | yes | no (parse-only) | partial | fails reconcile |
-| Stream-stream join | yes | partial | partial | reconcile |
-| Pattern detection | yes | no (parse-only) | partial | fails reconcile |
-| Sessionization | yes | no (parse-only) | partial | fails reconcile |
+| Aggregation (tumbling window) | yes | yes | yes | yes |
+| Stream enrichment (joins) | yes | yes | yes | yes |
+| Complex ETL (map + hopping + aggregate) | yes | yes | yes | yes |
+| Multi-branch | yes | yes | yes | yes |
+| Stream-stream join | yes | yes | yes | yes |
+| Pattern detection | yes | yes | yes | yes |
+| Sessionization | yes | yes | yes | yes |
 
-**Legend:** *yes* = tested or fully wired; *partial* = parses and/or partial runtime; *no* = `UnsupportedStageException` at engine runtime; *reconcile* = operator creates Deployment when pipeline is runtime-safe; *fails reconcile* = operator sets `Failed` phase.
+**Legend:** *yes* = tested or fully wired across the layer.
 
 Update this matrix when `TopologyBuilder` or operator validation changes.
 
@@ -142,7 +142,6 @@ Update this matrix when `TopologyBuilder` or operator validation changes.
 | Pipeline | Test class |
 |----------|------------|
 | All catalog entries | `SamplesParseTest` |
-| Filter, project, passthrough | `MaestroApplicationTest` |
-| Branch, pattern, sessionize (rejection) | `MaestroApplicationTest` |
-| SDK parity (basic) | `SamplesApiParityTest` |
-| Operator reconcile / fail | `StreamApplicationReconcilerTest` |
+| Filter, project, passthrough, map, aggregate, join, branch, pattern, sessionize | `MaestroApplicationTest` |
+| SDK parity (all catalog pipelines) | `SamplesApiParityTest` |
+| Operator reconcile (all catalog pipelines) | `StreamApplicationReconcilerTest` |

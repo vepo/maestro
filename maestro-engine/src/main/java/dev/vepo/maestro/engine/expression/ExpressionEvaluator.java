@@ -111,6 +111,16 @@ public final class ExpressionEvaluator {
     private static JsonNode evaluateFunction(JsonNode record, FunctionCallExpression fn) {
         if ("to_epoch_ms".equalsIgnoreCase(fn.functionName()) && !fn.arguments().isEmpty()) {
             var arg = evaluate(record, fn.arguments().getFirst());
+            if (arg.isNumber()) {
+                return JsonNodeFactory.instance.numberNode(arg.longValue());
+            }
+            if (arg.isTextual()) {
+                try {
+                    return JsonNodeFactory.instance.numberNode(Long.parseLong(arg.asText()));
+                } catch (NumberFormatException ignored) {
+                    return JsonNodeFactory.instance.numberNode(System.currentTimeMillis());
+                }
+            }
             return JsonNodeFactory.instance.numberNode(System.currentTimeMillis());
         }
         if ("CONCAT".equalsIgnoreCase(fn.functionName())) {
