@@ -1,0 +1,45 @@
+---
+description: Test coverage expectations for Maestro
+globs: "**/*.java"
+alwaysApply: false
+---
+
+# Test Coverage
+
+Every change to production code (`src/main/java`) must include or update tests in the same module.
+
+## By change type
+
+| Change type | Coverage expectation |
+|-------------|---------------------|
+| New Stream Language feature | Happy path + edge cases + invalid input |
+| Bug fix | Regression test reproducing the bug |
+| Refactor | Existing tests stay green; add tests if gaps exposed |
+| Public API / SDK surface | Contract tests; parity with equivalent DSL where applicable |
+| Operator reconciliation | Unit tests for diff logic; integration test for full reconcile loop |
+
+## By deployment layer
+
+| Layer | What to cover |
+|-------|--------------|
+| **Code** (`maestro-parser`) | Grammar rules, stages, predicates; assert on `StreamModel` records |
+| **API** (`maestro-api`) | Builder output equals parser output for same topology |
+| **Application** (`maestro-engine`, …) | Topology wiring, serde, config, lifecycle (start/stop/state) |
+| **Operator** (`maestro-operator`, …) | Spec → model mapping, reconcile actions, status updates |
+
+## What not to count as coverage
+
+- Generated ANTLR lexer/parser — test through `StreamTopologyParser`
+- Trivial record accessors — behavior tests suffice
+- Logging-only changes — no test unless behavior changed
+- Thin Docker/K8s manifests — validate via operator or integration tests, not manifest unit tests
+
+## Verification
+
+```bash
+mvn verify                                    # all modules
+mvn -pl maestro-parser test                   # code layer
+mvn -pl maestro-engine test                   # application layer
+```
+
+Do not merge production changes with failing or missing tests for the changed behavior.

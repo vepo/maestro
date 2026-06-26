@@ -1,0 +1,63 @@
+---
+description: DDD domain model and ubiquitous language for Maestro
+globs: "**/parser/model/**/*.java,**/parser/**/*.java,**/api/**/*.java,**/operator/**/*.java,**/crd/**/*.java"
+alwaysApply: false
+---
+
+# DDD & Domain Language
+
+## Framework vocabulary
+
+Maestro is a **deployment framework**, not just a parser. Use framework terms alongside DSL terms:
+
+| Term | Layer | Meaning |
+|------|-------|---------|
+| Stream Language | Code | Declarative DSL for topologies |
+| StreamModel | All | Canonical desired topology — shared contract |
+| Stream Application | Application | Running Kafka Streams process for a model |
+| Deployment | Application / Operator | Packaging and running a stream application |
+| Desired state | Operator | Spec the operator must reconcile |
+| Reconciliation | Operator | Align cluster resources with desired state |
+| Sync | Operator | Compare model vs running elements; apply diff |
+
+## Stream Language terms
+
+- **StreamModel** — root aggregate; one or more **Queries**
+- **Query** — `FROM source TO sink(s)`
+- **SourcePipeline** / **SourceStage** — input topics and upstream stages
+- **Stage** — Filter, Project, Join, Window, Aggregate, Transform, Flatten, UniqueBy, …
+- **Expression** / **Predicate** — WHERE clause tree
+
+Avoid leaking infrastructure names (`ParseTree`, `StreamsBuilder`, `Pod`, `Deployment`) into domain types.
+
+## Domain model rules
+
+- Domain types are **immutable records** in `dev.vepo.maestro.parser.model`
+- Stages and expressions form a **closed hierarchy** — new record types, not strings
+- Use domain enums (`ComparisonOperator`, `WindowType`) not magic strings
+- Validate in parser/API/operator boundaries; records hold data, not rules
+
+```java
+// ✅ GOOD — domain type usable by every layer
+public record FilterStage(Expression predicate) implements ProcessingStage {}
+
+// ❌ BAD — K8s or Kafka concern in domain
+public record FilterStage(Expression predicate, String consumerGroup) {}
+```
+
+## Layer boundaries
+
+| Layer | Translates |
+|-------|-----------|
+| Code | Stream Language text → `StreamModel` |
+| API | SDK calls → `StreamModel` |
+| Application | `StreamModel` → Kafka Streams topology |
+| Operator | K8s CR spec → `StreamModel`; drives application deployment |
+
+Never re-parse DSL strings at runtime in the application or operator layer — work from `StreamModel`.
+
+## Naming
+
+- Class names = domain concepts (`AggregateStage`, `StreamApplication`, not `GroupByNode`)
+- Operator status fields mirror domain state (`Desired`, `Ready`, `Synced`) not K8s internals
+- Test data uses realistic names (`input_topic`, `orders-stream`), not `foo`/`bar`

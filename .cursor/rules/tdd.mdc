@@ -1,0 +1,51 @@
+---
+description: Test-driven development workflow for Maestro
+globs: "**/src/test/**/*.java"
+alwaysApply: false
+---
+
+# TDD
+
+## Red → Green → Refactor
+
+1. **Red** — failing test describing behavior in **domain terms** (`StreamModel`, reconcile outcome, SDK topology)
+2. **Green** — smallest production change that passes
+3. **Refactor** — clean up after green; keep tests passing
+
+Never ship parser, engine, SDK, or operator logic without a test that would fail without it.
+
+## Test naming
+
+```java
+@Test
+void shouldParseQueryWithMultipleSinkTopics() { ... }
+
+@Test
+void shouldReconcileWhenDesiredModelChanges() { ... }
+
+@Test
+void shouldBuildSameModelAsParserForSimplePipeline() { ... }
+```
+
+- Method names: `should<Behavior>`
+- One logical focus per test; `@ParameterizedTest` for variant matrices
+
+## Layer-specific guidance
+
+**Code layer** — assert domain records, not parse trees:
+```java
+assertEquals(expectedStreamModel, parser.parse("FROM input TO out1, out2"));
+```
+
+**API layer** — assert SDK output matches parser for equivalent topology:
+```java
+assertEquals(parser.parse(dsl), Maestro.stream().from("input").to("output").build());
+```
+
+**Application layer** — Testcontainers for broker integration; unit-test pure topology builders without a broker.
+
+**Operator layer** — unit-test reconcile logic with fake clients; use envtest or mock K8s API for integration.
+
+## Bug fixes
+
+Write a regression test that fails on the old behavior before applying the fix.

@@ -1,0 +1,45 @@
+---
+description: Java coding standards for Maestro
+globs: "**/*.java"
+alwaysApply: false
+---
+
+# Java Quality
+
+## Style
+
+- Match existing code: 4-space indent, `var` for obvious locals, records for immutable data
+- Prefer package-private types unless part of a layer's **public API** (SDK, operator entrypoints)
+- One public top-level type per file; name matches the file
+
+## Immutability
+
+Domain and API types are immutable. Only infrastructure adapters hold mutable state (clients, caches).
+
+```java
+// ✅ GOOD — shared across all layers
+public record Query(SourcePipeline sourcePipeline, List<String> sinkTopics) {}
+
+// ❌ BAD — mutable domain object
+public class Query { private List<String> sinks; public void addSink(String s) { ... } }
+```
+
+## Dependencies
+
+- `parser.model` — JDK only; no Kafka, ANTLR, Jackson, SLF4J, or K8s
+- Code layer — no Kafka runtime dependencies
+- Application layer — Kafka at the boundary; do not expose Kafka types in public API
+- Operator layer — K8s client at the boundary; reconcile logic works on domain types
+- Constructor injection; no static mutable state
+- SLF4J with `{}` placeholders where logging is used
+
+## Error handling
+
+- Fail fast with clear messages; do not swallow exceptions
+- Domain validation errors are distinct from infrastructure failures
+- Use `Objects.requireNonNull` at layer boundaries
+
+## Public API (SDK / operator)
+
+- Minimal surface; expose `StreamModel` and fluent builders, not internal parsers or K8s helpers
+- Stable method names aligned with Stream Language vocabulary (`from`, `filter`, `to`, not Kafka jargon)

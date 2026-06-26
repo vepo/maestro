@@ -1,0 +1,54 @@
+---
+description: Deployment layers, module boundaries, and dependency rules for Maestro
+alwaysApply: true
+---
+
+# Architecture
+
+Maestro deploys Kafka Streams through four layers. Each layer may contain multiple Maven modules.
+
+## Deployment layers
+
+| Layer | Entry point for users | Modules (current / planned) |
+|-------|----------------------|----------------------------|
+| **API** | Java SDK | `maestro-api` |
+| **Code** | Stream Language | `maestro-parser` |
+| **Application** | JAR / Docker | `maestro-engine`, `maestro-app`, `maestro-docker` |
+| **Operator** | Kubernetes CRs | `maestro-operator`, `maestro-crd` |
+
+## Dependency flow
+
+```
+Operator ──→ Application ──→ Code ──→ Domain (parser.model)
+API      ──→ Code      ──→ Domain
+```
+
+- Dependencies point **down** only — never import a higher layer
+- `StreamModel` in `parser.model` is the **single source of truth** for topology shape
+- API builders and operator CRD specs must deserialize to / produce `StreamModel` — no parallel schemas
+
+## Layer responsibilities
+
+**Code** — parse Stream Language, validate syntax, build domain model. No Kafka runtime.
+
+**API** — fluent SDK for users who prefer Java over DSL strings. Output must be equivalent to parsed DSL.
+
+**Application** — translate `StreamModel` → Kafka Streams topology; manage process lifecycle, config, serdes. Package as runnable JAR/Docker.
+
+**Operator** — watch K8s custom resources; create/update/delete stream applications; reconcile desired `StreamModel` with running pods and report status.
+
+## Internal layering (within a module)
+
+| Concern | Allowed dependencies |
+|---------|---------------------|
+| Domain (`parser.model`) | JDK only |
+| Application logic | domain + same-module infra |
+| Infrastructure | ANTLR, Kafka, K8s clients, Docker |
+
+## Change discipline
+
+- New Stream Language feature: grammar → builder → model record → parser tests → engine wiring → (later) API + operator mapping
+- Do not bypass the parser with regex or ad-hoc JSON in any layer
+- Cross-layer API changes start in domain/code and propagate upward with tests at each layer
+- Generated code stays under `target/`; never edit ANTLR output by hand
+- Add new modules to the parent `pom.xml` under the correct layer package (`dev.vepo.maestro.<layer>`)
