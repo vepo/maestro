@@ -1,0 +1,14 @@
+apiVersion: maestro.dev/v1alpha1
+kind: StreamApplication
+metadata:
+  name: filter-active-users
+  namespace: default
+spec:
+  pipeline: |
+    FROM input
+    |> FILTER WHERE status = 'active'
+    |> TO output
+  kafka:
+    bootstrapServers: kafka:9092
+    applicationId: filter-active-users
+  image: maestro-app:local

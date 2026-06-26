@@ -7,6 +7,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import dev.vepo.maestro.crd.StreamApplication;
+import dev.vepo.maestro.crd.StreamApplicationSpec;
+
+import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 
 class StreamApplicationReconcilerTest {
     static java.util.stream.Stream<String> catalogPipelines() {
@@ -101,7 +104,8 @@ class StreamApplicationReconcilerTest {
     @MethodSource("catalogPipelines")
     void shouldReconcileCatalogPipeline(String pipeline) {
         var cr = new StreamApplication();
-        cr.getMetadata().setName("catalog-app");
+        cr.setMetadata(new ObjectMetaBuilder().withName("catalog-app").withNamespace("default").build());
+        cr.setSpec(new StreamApplicationSpec());
         cr.getSpec().setPipeline(pipeline);
         cr.getSpec().getKafka().setBootstrapServers("kafka:9092");
         cr.getSpec().getKafka().setApplicationId("catalog-app");

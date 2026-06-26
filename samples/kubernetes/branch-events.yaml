@@ -1,0 +1,23 @@
+apiVersion: maestro.dev/v1alpha1
+kind: StreamApplication
+metadata:
+  name: branch-events
+  namespace: default
+spec:
+  pipeline: |
+    FROM user_events
+    |> BRANCH
+       CASE WHEN event_type = 'purchase'
+            |> PROJECT purchase_data
+            |> TO purchase_topic,
+       CASE WHEN event_type = 'click'
+            |> WINDOW TUMBLING SIZE 1 HOUR
+            |> GROUP BY user_id
+            |> AGGREGATE count(*) AS click_count
+            |> TO click_analytics,
+       DEFAULT
+            |> TO other_events_topic
+  kafka:
+    bootstrapServers: kafka:9092
+    applicationId: branch-events
+  image: maestro-app:local

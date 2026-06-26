@@ -23,10 +23,16 @@ public final class StreamApplicationReconciler {
         }
     }
 
+    private static String namespaceOf(StreamApplication resource) {
+        var namespace = resource.getMetadata().getNamespace();
+        return namespace == null || namespace.isBlank() ? "default" : namespace;
+    }
+
     private final StreamTopologyParser parser = new StreamTopologyParser();
 
     public Deployment buildDeployment(StreamApplication resource) {
         var name = resource.getMetadata().getName();
+        var namespace = namespaceOf(resource);
         var labels = Map.of("app", name, "managed-by", "maestro-operator");
         var env = new HashMap<String, String>();
         env.put("KAFKA_BOOTSTRAP_SERVERS", resource.getSpec().getKafka().getBootstrapServers());
@@ -34,7 +40,7 @@ public final class StreamApplicationReconciler {
         env.put("MAESTRO_PIPELINE", resource.getSpec().getPipeline());
 
         return new DeploymentBuilder()
-                                      .withNewMetadata().withName(name).withLabels(labels).endMetadata()
+                                      .withNewMetadata().withName(name).withNamespace(namespace).withLabels(labels).endMetadata()
                                       .withNewSpec()
                                       .withReplicas(1)
                                       .withNewSelector().addToMatchLabels("app", name).endSelector()

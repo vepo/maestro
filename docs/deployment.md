@@ -53,12 +53,27 @@ See [maestro-docker/README.md](../maestro-docker/README.md).
 
 ## Kubernetes operator
 
+### Build operator image
+
+```bash
+mvn -pl maestro-operator package -DskipTests
+docker build -f maestro-operator/Dockerfile -t maestro-operator:local .
+```
+
+For Minikube, load the operator and app images:
+
+```bash
+minikube image load maestro-operator:local maestro-app:local
+```
+
 ### Install CRD and operator
 
 ```bash
 kubectl apply -f maestro-crd/src/main/resources/crd/streamapplication-crd.yaml
 kubectl apply -k deploy/operator/overlays/staging   # or production
 ```
+
+The operator runs `MaestroOperatorMain`: it watches `StreamApplication` resources cluster-wide, parses `spec.pipeline`, creates or updates a `Deployment` for `maestro-app`, and patches `.status`.
 
 ### Apply a StreamApplication
 
@@ -78,16 +93,18 @@ spec:
   image: maestro-app:local
 ```
 
-Example manifest: [samples/kubernetes/orders-filter.yaml](../samples/kubernetes/orders-filter.yaml).
+Example manifests: [samples/kubernetes/](../samples/kubernetes/README.md) (one per catalog pipeline).
 
 ### Reconciliation behavior
 
-| Pipeline content | Operator result |
-|------------------|-----------------|
-| Runtime-safe stages (filter, project, …) | `Synced` — Deployment created/updated |
-| Unsupported stages (branch, pattern, sessionize) | `Failed` — no Deployment |
+| Outcome | Operator action |
+|---------|-----------------|
+| Pipeline parses and validates | `Synced` — `Deployment` created or updated |
+| Parse or validation error | `Failed` — existing `Deployment` removed |
 
-The operator parses `spec.pipeline` to `StreamModel` and validates engine support before reconciling.
+All catalog stages (filter, aggregate, join, branch, pattern, sessionize, …) are accepted when the DSL is valid.
+
+The operator parses `spec.pipeline` to `StreamModel` before reconciling.
 
 ### Status
 

@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: maestro-operator
+  labels:
+    app: maestro-operator
 spec:
   replicas: 1
   selector:
@@ -12,7 +14,8 @@ spec:
       labels:
         app: maestro-operator
     spec:
+      serviceAccountName: maestro-operator
       containers:
         - name: operator
-          image: ghcr.io/vepo/maestro-operator:latest
+          image: maestro-operator:local
           imagePullPolicy: IfNotPresent

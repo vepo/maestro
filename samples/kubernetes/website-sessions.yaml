@@ -1,0 +1,21 @@
+apiVersion: maestro.dev/v1alpha1
+kind: StreamApplication
+metadata:
+  name: website-sessions
+  namespace: default
+spec:
+  pipeline: |
+    FROM website_activity
+    |> SESSIONIZE BY user_id
+       GAP 30 MINUTES
+       TIMEOUT 2 HOURS
+    |> AGGREGATE
+       count(*) AS actions_per_session,
+       sum(page_views) AS total_views,
+       first(action_time) AS session_start,
+       last(action_time) AS session_end
+    |> TO sessions_topic
+  kafka:
+    bootstrapServers: kafka:9092
+    applicationId: website-sessions
+  image: maestro-app:local

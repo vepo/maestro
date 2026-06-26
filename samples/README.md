@@ -29,7 +29,7 @@ Create source and sink topics before starting (see each sample README).
 | Stock patterns | [stock-patterns/](stock-patterns/) | yes | CEP pattern detection |
 | Website sessions | [website-sessions/](website-sessions/) | yes | Sessionization + aggregates |
 | Branch events | [branch-events/](branch-events/) | yes | Multi-branch routing |
-| Kubernetes | [kubernetes/](kubernetes/) | — | `StreamApplication` CR example |
+| Kubernetes | [kubernetes/](kubernetes/) | — | `StreamApplication` CR per catalog pipeline |
 | Java SDK | [sdk/](sdk/) | yes | Equivalent API builder code |
 
 **Legend:** *yes* = covered by `MaestroApplicationTest` and catalog integration tests.

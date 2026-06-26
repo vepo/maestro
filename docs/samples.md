@@ -145,3 +145,4 @@ Update this matrix when `TopologyBuilder` or operator validation changes.
 | Filter, project, passthrough, map, aggregate, join, branch, pattern, sessionize | `MaestroApplicationTest` |
 | SDK parity (all catalog pipelines) | `SamplesApiParityTest` |
 | Operator reconcile (all catalog pipelines) | `StreamApplicationReconcilerTest` |
+| Operator controller (watch + Deployment apply) | `MaestroOperatorMain`, `StreamApplicationController` |
