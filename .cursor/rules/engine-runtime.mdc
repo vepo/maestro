@@ -8,19 +8,19 @@ alwaysApply: false
 
 ## Scope (current)
 
-- **Implemented:** passthrough Query (each source topic → each sink topic via `StreamsBuilder.stream().to()`)
-- **Not yet wired:** Filter, Project, Window, Aggregate, Join, Transform, Flatten stages in `MaestroApplication.start()`
+- **Implemented:** `TopologyBuilder` wires filter, project, map, window + group + aggregate, lookup/stream join, and passthrough `TO` sinks
+- **Parse-only (throws `UnsupportedStageException`):** `BranchStage`, `PatternStage`, `SessionizeStage`
 - **Stub:** `MaestroMetrics` returns placeholder values
 
-Extend stage support in `MaestroApplication.start()` by walking `SourcePipeline.processingStages()` — do not re-parse DSL in engine logic.
+Extend stage support in `TopologyBuilder` by walking `SourcePipeline.processingStages()` — do not re-parse DSL in engine logic.
 
 ## Entry points
 
 ```java
-// ✅ Preferred — work from domain model
+// Preferred — work from domain model
 new MaestroApplication(streamModel, configs);
 
-// ⚠️ Bootstrap/CLI only — parses DSL once at construction
+// Bootstrap/CLI only — parses DSL once at construction
 new MaestroApplication(dslString, configs);
 ```
 
@@ -30,15 +30,14 @@ Operator and API layers should pass `StreamModel`, not raw DSL strings, at runti
 
 - Kafka Streams / clients: engine package only
 - Jackson **3**: `tools.jackson.databind.ObjectMapper` (not `com.fasterxml.jackson`)
-- Serde: `JsonSerde`, `JsonSerializer`, `JsonDeserializer` via `MaestroConfigs.streams()`
+- Serde: `String` keys, `JsonSerde` values via `MaestroConfigs.streams()`
 - Depends on `maestro-parser` for `StreamModel` — do not duplicate domain types
 
 ## Tests
 
 - Integration: Testcontainers Kafka (`@Testcontainers`, `KafkaContainer`)
-- Use `StreamTestDSL.publishTo()` / `expectOn()` inside Scenario actions
-- `@Disabled` tests in `MaestroApplicationTest` are **future specs** — invalid grammar; do not copy their DSL
-- Align Kafka version with parent `${version.kafka}` when updating test images
+- Use `SendDSL` / `VerifyDSL` in `MaestroApplicationTest`
+- Canonical DSL examples: `docs/samples.md` and `SamplesParseTest`
 
 ## Logging
 

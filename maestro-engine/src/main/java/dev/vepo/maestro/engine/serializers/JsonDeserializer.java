@@ -16,7 +16,9 @@ public class JsonDeserializer implements Deserializer {
 
     @Override
     public Object deserialize(String topic, byte[] data) {
-        logger.info("Deserializing {}", data);
+        if (data == null) {
+            return null;
+        }
         return mapper.readTree(data);
     }
 }

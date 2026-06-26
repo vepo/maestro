@@ -4,17 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Gherkin-like scaffold for parser and domain tests.
- * Scenario strings must use Maestro domain language.
+ * Gherkin-like scaffold for parser and domain tests. Scenario strings must use
+ * Maestro domain language.
  */
 final class Scenario {
-
-    private Scenario() {
-    }
-
-    static Given given(String description) {
-        return new Given(description);
-    }
 
     static final class Given {
         private final List<String> steps = new ArrayList<>();
@@ -23,31 +16,13 @@ final class Scenario {
             steps.add("Given " + description);
         }
 
-        When when(String action) {
-            return new When(steps, action);
-        }
-
         Given and(String context) {
             steps.add("And " + context);
             return this;
         }
-    }
 
-    static final class When {
-        private final List<String> steps;
-
-        When(List<String> steps, String action) {
-            this.steps = new ArrayList<>(steps);
-            this.steps.add("When " + action);
-        }
-
-        Then then(String outcome) {
-            return new Then(steps, outcome);
-        }
-
-        When and(String action) {
-            steps.add("And " + action);
-            return this;
+        When when(String action) {
+            return new When(steps, action);
         }
     }
 
@@ -74,4 +49,28 @@ final class Scenario {
             return List.copyOf(steps);
         }
     }
+
+    static final class When {
+        private final List<String> steps;
+
+        When(List<String> steps, String action) {
+            this.steps = new ArrayList<>(steps);
+            this.steps.add("When " + action);
+        }
+
+        When and(String action) {
+            steps.add("And " + action);
+            return this;
+        }
+
+        Then then(String outcome) {
+            return new Then(steps, outcome);
+        }
+    }
+
+    static Given given(String description) {
+        return new Given(description);
+    }
+
+    private Scenario() {}
 }

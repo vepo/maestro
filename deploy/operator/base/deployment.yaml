@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maestro-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maestro-operator
+  template:
+    metadata:
+      labels:
+        app: maestro-operator
+    spec:
+      containers:
+        - name: operator
+          image: ghcr.io/vepo/maestro-operator:latest
+          imagePullPolicy: IfNotPresent

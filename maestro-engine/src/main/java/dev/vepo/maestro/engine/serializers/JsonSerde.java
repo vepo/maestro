@@ -7,13 +7,13 @@ import org.apache.kafka.common.serialization.Serializer;
 public class JsonSerde implements Serde {
 
     @Override
+    public Deserializer deserializer() {
+        return new JsonDeserializer();
+    }
+
+    @Override
     public Serializer serializer() {
         return new JsonSerializer();
     }
 
-    @Override
-    public Deserializer deserializer() {
-        return new JsonDeserializer();
-    }
-    
 }

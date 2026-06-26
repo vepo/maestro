@@ -49,6 +49,7 @@ public class MaestroTable {
             return description;
         }
     }
+
     private final String name;
 
     private final Map<String, String> data;
@@ -62,10 +63,21 @@ public class MaestroTable {
     }
 
     /**
-     * Set the key for the next value operation
+     * Clear all data from the table
      */
-    public MaestroValue withKey(String key) {
-        return new MaestroValue(Objects.requireNonNull(key, "Key cannot be null"));
+    public void clear() {
+        data.clear();
+        state = TableState.CREATED;
+    }
+
+    /**
+     * Check if the table contains a key
+     */
+    public boolean containsKey(String key) {
+        if (state != TableState.READY) {
+            throw new IllegalStateException("Table '" + name + "' is not ready. Current state: " + state);
+        }
+        return data.containsKey(key);
     }
 
     /**
@@ -86,39 +98,21 @@ public class MaestroTable {
         System.out.println("Table '" + name + "' created with " + data.size() + " entries");
     }
 
-    /**
-     * Look up a value by key (used by the engine during joins)
-     */
-    public String lookup(String key) {
-        if (state != TableState.READY) {
-            throw new IllegalStateException("Table '" + name + "' is not ready. Current state: " + state);
-        }
-        return data.get(key);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        MaestroTable that = (MaestroTable) o;
+        return Objects.equals(name, that.name);
     }
 
     /**
-     * Check if the table contains a key
+     * Get a copy of all data (for testing/debugging)
      */
-    public boolean containsKey(String key) {
-        if (state != TableState.READY) {
-            throw new IllegalStateException("Table '" + name + "' is not ready. Current state: " + state);
-        }
-        return data.containsKey(key);
-    }
-
-    /**
-     * Get the size of the table
-     */
-    public int size() {
-        return data.size();
-    }
-
-    /**
-     * Clear all data from the table
-     */
-    public void clear() {
-        data.clear();
-        state = TableState.CREATED;
+    public Map<String, String> getAllData() {
+        return new HashMap<>(data);
     }
 
     /**
@@ -133,6 +127,18 @@ public class MaestroTable {
      */
     public TableState getState() {
         return state;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name);
+    }
+
+    /**
+     * Check if table is ready for queries
+     */
+    public boolean isReady() {
+        return state == TableState.READY;
     }
 
     /**
@@ -152,6 +158,16 @@ public class MaestroTable {
     }
 
     /**
+     * Look up a value by key (used by the engine during joins)
+     */
+    public String lookup(String key) {
+        if (state != TableState.READY) {
+            throw new IllegalStateException("Table '" + name + "' is not ready. Current state: " + state);
+        }
+        return data.get(key);
+    }
+
+    /**
      * Remove a specific key from the table
      */
     public MaestroTable remove(String key) {
@@ -160,6 +176,19 @@ public class MaestroTable {
         }
         data.remove(key);
         return this;
+    }
+
+    /**
+     * Get the size of the table
+     */
+    public int size() {
+        return data.size();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("MaestroTable{name='%s', state=%s, size=%d}",
+                             name, state, data.size());
     }
 
     /**
@@ -177,37 +206,9 @@ public class MaestroTable {
     }
 
     /**
-     * Check if table is ready for queries
+     * Set the key for the next value operation
      */
-    public boolean isReady() {
-        return state == TableState.READY;
-    }
-
-    /**
-     * Get a copy of all data (for testing/debugging)
-     */
-    public Map<String, String> getAllData() {
-        return new HashMap<>(data);
-    }
-
-    @Override
-    public String toString() {
-        return String.format("MaestroTable{name='%s', state=%s, size=%d}",
-                             name, state, data.size());
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        MaestroTable that = (MaestroTable) o;
-        return Objects.equals(name, that.name);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name);
+    public MaestroValue withKey(String key) {
+        return new MaestroValue(Objects.requireNonNull(key, "Key cannot be null"));
     }
 }

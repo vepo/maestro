@@ -44,11 +44,11 @@ The repo is a Maven multi-module project. Modules are added per layer as needed;
 |--------|-------|--------|------|
 | `maestro-parser` | Code | exists | ANTLR grammar, parser, domain model (`parser.model`) |
 | `maestro-engine` | Application | exists | Kafka Streams runtime; executes `StreamModel` |
-| `maestro-api` | API | planned | Public SDK for defining streams programmatically |
-| `maestro-app` | Application | planned | Runnable fat JAR / main entrypoint |
-| `maestro-docker` | Application | planned | Container image packaging |
-| `maestro-operator` | Operator | planned | Kubernetes controller; sync model ↔ running apps |
-| `maestro-crd` | Operator | planned | Custom resource definitions and schemas |
+| `maestro-api` | API | exists | Public SDK for defining streams programmatically |
+| `maestro-app` | Application | exists | Runnable fat JAR / main entrypoint |
+| `maestro-docker` | Application | exists | Container image packaging |
+| `maestro-operator` | Operator | exists | Kubernetes controller; sync model ↔ running apps |
+| `maestro-crd` | Operator | exists | Custom resource definitions and schemas |
 
 Package root: `dev.vepo.maestro`.
 
@@ -60,7 +60,7 @@ When adding a module, place it under the correct layer, declare dependencies onl
 - Coding standards: *Effective Java* 3rd ed. — all 90 items in `java-quality.mdc`
 - ANTLR 4 (Stream Language), Apache Kafka Streams 4.x (runtime)
 - JUnit 5, AssertJ, Awaitility, Testcontainers (tests)
-- Kubernetes / Java Operator SDK (planned, operator layer)
+- Kubernetes / Fabric8 client (operator layer)
 
 ## Commands
 

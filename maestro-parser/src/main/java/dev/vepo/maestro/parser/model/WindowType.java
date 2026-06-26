@@ -1,3 +1,8 @@
 package dev.vepo.maestro.parser.model;
 
-public enum WindowType { TUMBLING, SLIDING, SESSION }
+public enum WindowType {
+    TUMBLING,
+    HOPPING,
+    SLIDING,
+    SESSION
+}

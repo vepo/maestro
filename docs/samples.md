@@ -451,4 +451,19 @@ fragment EXP        : [Ee] [+\-]? INT;
 // Skip whitespace
 WS          : [ \t\r\n]+ -> skip;
 COMMENT     : '--' ~[\r\n]* -> skip;
-``
+```
+
+## Layer coverage matrix
+
+| Sample pipeline | Parser | Engine | API | Operator |
+|-----------------|--------|--------|-----|----------|
+| Basic filter + project | yes | yes | yes | yes |
+| Aggregation (tumbling window) | yes | partial | partial | reconcile |
+| Stream enrichment (joins) | yes | partial | partial | reconcile |
+| Complex ETL (map + hopping + aggregate) | yes | partial | partial | reconcile |
+| Multi-branch | yes | no (parse-only) | partial | fails reconcile |
+| Stream-stream join | yes | partial | partial | reconcile |
+| Pattern detection | yes | no (parse-only) | partial | fails reconcile |
+| Sessionization | yes | no (parse-only) | partial | fails reconcile |
+
+**Legend:** *yes* = tested or fully wired; *partial* = parses and/or partial runtime; *no* = `UnsupportedStageException` at engine runtime; *reconcile* = operator creates Deployment when pipeline is runtime-safe.

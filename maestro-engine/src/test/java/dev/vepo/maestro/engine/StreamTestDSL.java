@@ -5,22 +5,21 @@ package dev.vepo.maestro.engine;
  */
 final class StreamTestDSL {
 
-    private StreamTestDSL() {
-    }
-
-    static String sourceTopic(String name) {
-        return name;
-    }
-
-    static String sinkTopic(String name) {
-        return name;
+    static VerifyDSL expectOn(String sinkTopic, String bootstrapServers) {
+        return new VerifyDSL(sinkTopic, bootstrapServers);
     }
 
     static SendDSL publishTo(String sourceTopic, String bootstrapServers) {
         return new SendDSL(sourceTopic, bootstrapServers);
     }
 
-    static VerifyDSL expectOn(String sinkTopic, String bootstrapServers) {
-        return new VerifyDSL(sinkTopic, bootstrapServers);
+    static String sinkTopic(String name) {
+        return name;
     }
+
+    static String sourceTopic(String name) {
+        return name;
+    }
+
+    private StreamTestDSL() {}
 }

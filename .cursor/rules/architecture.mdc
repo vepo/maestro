@@ -53,6 +53,6 @@ API      ──→ Code      ──→ Domain
 - Generated code stays under `target/`; never edit ANTLR output by hand
 - Add new modules to the parent `pom.xml` under the correct layer package (`dev.vepo.maestro.<layer>`)
 
-## Engine MVP (current)
+## Engine runtime (current)
 
-`MaestroApplication` wires **passthrough only**. Rich stage model exists in `parser.model`; engine stage translation is added incrementally per `engine-runtime.mdc`. Do not assume all parser stages run in Kafka Streams yet.
+`TopologyBuilder` executes filter, project, map, window/group/aggregate, and lookup joins. Branch, pattern, and sessionize stages parse but throw `UnsupportedStageException` at runtime. See `engine-runtime.mdc`.

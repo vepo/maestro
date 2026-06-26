@@ -16,43 +16,56 @@ import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionFactory;
 
 class VerifyDSL {
+    class RecordAssertion {
+        private final VerifyDSL verify;
+        private List<ConsumerRecord<String, String>> records;
+
+        RecordAssertion(VerifyDSL verify) {
+            this.verify = verify;
+        }
+
+        RecordAssertion assertAll(Consumer<ConsumerRecord<String, String>> assertion) {
+            this.records = verify.consumeRecords();
+            records.forEach(assertion);
+            return this;
+        }
+
+        RecordAssertion assertFirst(Consumer<ConsumerRecord<String, String>> assertion) {
+            this.records = verify.consumeRecords();
+            Assertions.assertThat(records).isNotEmpty();
+            assertion.accept(records.get(0));
+            return this;
+        }
+
+        RecordAssertion assertThat(Consumer<List<ConsumerRecord<String, String>>> assertion) {
+            this.records = verify.consumeRecords();
+
+            if (verify.expectedCount > 0) {
+                Assertions.assertThat(records).hasSize(verify.expectedCount);
+            }
+
+            assertion.accept(records);
+            return this;
+        }
+
+        List<ConsumerRecord<String, String>> get() {
+            if (records == null) {
+                records = verify.consumeRecords();
+            }
+            return records;
+        }
+    }
+
     private final String topic;
     private final String bootstrapServers;
     private Duration timeout = Duration.ofSeconds(10);
     private Duration pollInterval = Duration.ofMillis(500);
+
     private int expectedCount = -1;
 
     VerifyDSL(String topic, String bootstrapServers) {
         this.topic = topic;
         this.bootstrapServers = bootstrapServers;
-    }
-
-    VerifyDSL within(long duration, TimeUnit unit) {
-        this.timeout = Duration.ofNanos(unit.toNanos(duration));
-        return this;
-    }
-
-    VerifyDSL within(Duration duration) {
-        this.timeout = duration;
-        return this;
-    }
-
-    VerifyDSL withTimeout(long duration, TimeUnit unit) {
-        return within(duration, unit);
-    }
-
-    VerifyDSL withPollInterval(long duration, TimeUnit unit) {
-        this.pollInterval = Duration.ofNanos(unit.toNanos(duration));
-        return this;
-    }
-
-    VerifyDSL received(int count) {
-        this.expectedCount = count;
-        return this;
-    }
-
-    RecordAssertion records() {
-        return new RecordAssertion(this);
     }
 
     private List<ConsumerRecord<String, String>> consumeRecords() {
@@ -89,43 +102,31 @@ class VerifyDSL {
         return records;
     }
 
-    class RecordAssertion {
-        private final VerifyDSL verify;
-        private List<ConsumerRecord<String, String>> records;
+    VerifyDSL received(int count) {
+        this.expectedCount = count;
+        return this;
+    }
 
-        RecordAssertion(VerifyDSL verify) {
-            this.verify = verify;
-        }
+    RecordAssertion records() {
+        return new RecordAssertion(this);
+    }
 
-        RecordAssertion assertThat(Consumer<List<ConsumerRecord<String, String>>> assertion) {
-            this.records = verify.consumeRecords();
+    VerifyDSL within(Duration duration) {
+        this.timeout = duration;
+        return this;
+    }
 
-            if (verify.expectedCount > 0) {
-                Assertions.assertThat(records).hasSize(verify.expectedCount);
-            }
+    VerifyDSL within(long duration, TimeUnit unit) {
+        this.timeout = Duration.ofNanos(unit.toNanos(duration));
+        return this;
+    }
 
-            assertion.accept(records);
-            return this;
-        }
+    VerifyDSL withPollInterval(long duration, TimeUnit unit) {
+        this.pollInterval = Duration.ofNanos(unit.toNanos(duration));
+        return this;
+    }
 
-        RecordAssertion assertFirst(Consumer<ConsumerRecord<String, String>> assertion) {
-            this.records = verify.consumeRecords();
-            Assertions.assertThat(records).isNotEmpty();
-            assertion.accept(records.get(0));
-            return this;
-        }
-
-        RecordAssertion assertAll(Consumer<ConsumerRecord<String, String>> assertion) {
-            this.records = verify.consumeRecords();
-            records.forEach(assertion);
-            return this;
-        }
-
-        List<ConsumerRecord<String, String>> get() {
-            if (records == null) {
-                records = verify.consumeRecords();
-            }
-            return records;
-        }
+    VerifyDSL withTimeout(long duration, TimeUnit unit) {
+        return within(duration, unit);
     }
 }

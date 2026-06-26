@@ -1,7 +1,13 @@
 package dev.vepo.maestro.parser.model;
 
-import java.util.List;
 import java.util.Optional;
 
-public record JoinStage(List<String> sourceTopics, JoinCondition condition, Optional<WindowType> windowType) 
-    implements ProcessingStage {}
+import dev.vepo.maestro.parser.model.Duration;
+
+public record JoinStage(
+                        String target,
+                        Expression condition,
+                        JoinKind kind,
+                        Optional<String> sourceTopic,
+                        Optional<Duration> within)
+        implements ProcessingStage {}

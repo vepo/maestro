@@ -10,22 +10,21 @@ import dev.vepo.maestro.parser.model.StreamModel;
  */
 final class DomainFixtures {
 
-    private DomainFixtures() {
-    }
-
-    static StreamModel streamModel(Query... queries) {
-        return new StreamModel(queries);
+    static Query query(SourcePipeline sourcePipeline, String... sinkTopics) {
+        return new Query(sourcePipeline, sinkTopics);
     }
 
     static Query query(String sourceTopic, String... sinkTopics) {
         return new Query(sourcePipeline(sourceTopic), sinkTopics);
     }
 
-    static Query query(SourcePipeline sourcePipeline, String... sinkTopics) {
-        return new Query(sourcePipeline, sinkTopics);
-    }
-
     static SourcePipeline sourcePipeline(String... sourceTopics) {
         return new SourcePipeline(new SourceStage(sourceTopics));
     }
+
+    static StreamModel streamModel(Query... queries) {
+        return new StreamModel(queries);
+    }
+
+    private DomainFixtures() {}
 }

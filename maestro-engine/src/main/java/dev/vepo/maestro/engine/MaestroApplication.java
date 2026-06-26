@@ -12,7 +12,24 @@ import dev.vepo.maestro.parser.StreamTopologyParser;
 import dev.vepo.maestro.parser.model.StreamModel;
 
 public class MaestroApplication implements AutoCloseable {
+    public enum State {
+        NOT_STARTED,
+        CREATED,
+        REBALANCING,
+        RUNNING,
+        PENDING_SHUTDOWN,
+        NOT_RUNNING,
+        PENDING_ERROR,
+        ERROR;
+
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(MaestroApplication.class);
+
+    private static StreamModel load(String definition) {
+        StreamTopologyParser parser = new StreamTopologyParser();
+        return parser.parse(definition);
+    }
 
     public static void main(String[] args) {
         var configs = new MaestroConfigs(Map.of());
@@ -21,23 +38,19 @@ public class MaestroApplication implements AutoCloseable {
         }
     }
 
-    private static StreamModel load(String definition) {
-        StreamTopologyParser parser = new StreamTopologyParser();
-        return parser.parse(definition);
-    }
-
     private final StreamModel model;
     private final MaestroConfigs configs;
-    private KafkaStreams streams;
 
-    public MaestroApplication(String definition, MaestroConfigs configs) {
-        this(load(definition), configs);
-    }
+    private KafkaStreams streams;
 
     public MaestroApplication(StreamModel model, MaestroConfigs configs) {
         this.model = model;
         this.configs = configs;
         this.streams = null;
+    }
+
+    public MaestroApplication(String definition, MaestroConfigs configs) {
+        this(load(definition), configs);
     }
 
     @Override
@@ -51,20 +64,14 @@ public class MaestroApplication implements AutoCloseable {
         return new MaestroMetrics();
     }
 
-    public MaestroTable table(String key) {
-        return new MaestroTable(key);
-    }
-
-    public enum State {
-        NOT_STARTED,
-        CREATED,
-        REBALANCING,
-        RUNNING,
-        PENDING_SHUTDOWN,
-        NOT_RUNNING,
-        PENDING_ERROR,
-        ERROR;
-
+    public synchronized void start() {
+        if (Objects.isNull(streams)) {
+            var builder = new StreamsBuilder();
+            TopologyBuilder.build(model, builder);
+            logger.info("Topology: {}", builder);
+            this.streams = new KafkaStreams(builder.build(), configs.streams());
+            this.streams.start();
+        }
     }
 
     public State state() {
@@ -83,19 +90,7 @@ public class MaestroApplication implements AutoCloseable {
         }
     }
 
-    public synchronized void start() {
-        if (Objects.isNull(streams)) {
-            var builder = new StreamsBuilder();
-            model.queries()
-                 .forEach(query -> query.sourcePipeline()
-                                        .sourceStage()
-                                        .topics()
-                                        .forEach(topic -> query.sinkTopics()
-                                                               .forEach(sink -> builder.stream(topic)
-                                                                                       .to(sink))));
-            logger.info("Topology: {}", builder);
-            this.streams = new KafkaStreams(builder.build(), configs.streams());
-            this.streams.start();
-        }
+    public MaestroTable table(String key) {
+        return new MaestroTable(key);
     }
 }

@@ -20,46 +20,38 @@ Stream.g4 → ANTLR generates lexer/parser/listener (target/)
 
 Never edit generated files. Rebuild: `mvn -pl maestro-parser generate-sources test`.
 
-## Canonical syntax (from grammar)
+## Canonical syntax (from docs/samples.md)
 
 ```
-FROM topic1, topic2 [WHERE expr | UNIQUE BY f1, f2]
-  ( |> PROJECT f1, f2
-  | |> WHERE expr              -- FilterStage (not "FILTER WHERE")
-  | |> TRANSFORM f1 = expr     -- not "MAP SET"
-  | |> AGGREGATE BY f1 COUNT(*) AS alias
-  | |> WINDOW TUMBLING 5 MINUTES [EVERY 1 MINUTES]
-  | |> JOIN WITH other ON left = right
-  | |> FLATTEN field
-  )*
-TO sink1, sink2;
+FROM topic
+|> FILTER WHERE expr
+|> PROJECT fields: f1, f2
+|> MAP SET f1 = expr, f2 = expr
+|> WINDOW TUMBLING SIZE 5 MINUTES
+|> GROUP BY f1, f2
+|> AGGREGATE count(*) AS alias, avg(f) AS alias
+|> JOIN users ON orders.user_id = users.id LOOKUP TABLE 'users'
+|> BRANCH CASE WHEN … |> TO topic, DEFAULT |> TO topic
+|> PATTERN … DETECT AS alias
+|> SESSIONIZE BY user_id GAP 30 MINUTES
+|> TO sink1, sink2
 ```
 
-Stages chain with `|>` (`PIPE`). Keywords are case-insensitive.
-
-## WHERE placement
-
-- **SourceStage** — `FROM topic WHERE expr` → `SourceStage.whereClause`
-- **FilterStage** — `|> WHERE expr` → pipeline `FilterStage`
-
-Both use `Expression`; different domain locations.
+Stages chain with `|>` (`PIPE`). Keywords are case-insensitive. Comments: `-- …`
 
 ## Builder pattern (`StreamQueriesBuilder`)
 
 - Extends generated `StreamBaseListener` (listener, not visitor)
-- Two stacks: `stack` (pipeline objects), `expressions` (WHERE trees)
-- `ProcessingStage` list built in reverse pop order in `exitSourcePipeline`
-- `WindowType.valueOf(identifier.toUpperCase())` — identifiers must match enum names
-- Entry point for parsing: `StreamTopologyParser` only
+- Builds `SourcePipeline` (source + processing stages) and collects `ToStage` sink topics
+- Entry point for parsing: `StreamTopologyParser.stream()` only
 
 ## Invalid syntax agents often invent (reject)
 
 | Wrong | Correct |
 |-------|---------|
-| `\|> FILTER WHERE x = 1` | `\|> WHERE x = 1` |
-| `\|> PROJECT fields: a, b` | `\|> PROJECT a, b` |
-| `\|> GROUP BY status` | `\|> AGGREGATE BY status COUNT(*) …` |
-| `\|> MAP SET …` | `\|> TRANSFORM field = expr` |
-| `\|> JOIN … LOOKUP TABLE` | `\|> JOIN WITH topic ON a = b` |
+| `\|> WHERE x = 1` | `\|> FILTER WHERE x = 1` |
+| `\|> TRANSFORM f = expr` | `\|> MAP SET f = expr` |
+| `\|> JOIN WITH topic ON a = b` | `\|> JOIN topic ON a = b LOOKUP TABLE 't'` |
+| `TO sink1; TO sink2` | `\|> TO sink1, sink2` (single pipeline) |
 
-Copy syntax from parser tests, not disabled engine tests.
+Copy syntax from `docs/samples.md` and `SamplesParseTest`, not legacy engine tests.

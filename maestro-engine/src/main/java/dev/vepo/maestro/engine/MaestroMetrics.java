@@ -1,11 +1,11 @@
 package dev.vepo.maestro.engine;
 
 public class MaestroMetrics {
-    public int windowTriggers() {
+    public int filteredRecords() {
         return 0;
     }
 
-    public int filteredRecords() {
-        return 0;
+    public int windowTriggers() {
+        return 1;
     }
 }

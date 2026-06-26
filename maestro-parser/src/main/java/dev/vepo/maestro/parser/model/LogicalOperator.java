@@ -1,3 +1,5 @@
 package dev.vepo.maestro.parser.model;
 
-public enum LogicalOperator { AND, OR }
+public enum LogicalOperator {
+    AND, OR
+}

@@ -29,9 +29,9 @@ Read `AGENTS.md` before any change. Run `mvn verify` before finishing.
 - **Preferred engine entry:** `MaestroApplication(StreamModel, MaestroConfigs)` — String constructor is CLI/bootstrap only
 - **Verify:** `mvn verify` (or module-scoped test) after production changes
 
-## Engine MVP (current state)
+## Engine runtime (current state)
 
-`MaestroApplication.start()` implements **passthrough only** (source topic → sink topic). Parser model supports many stages; engine wiring is incremental. Do not assume disabled engine tests reflect implemented behavior.
+`TopologyBuilder` implements core stages (filter, project, map, aggregate, join). Branch, pattern, and sessionize are parse-only until wired. Integration tests live in `MaestroApplicationTest` using `docs/samples.md` syntax.
 
 ## When unsure
 
