@@ -24,6 +24,7 @@ import dev.vepo.maestro.parser.model.ProcessingStage;
 import dev.vepo.maestro.parser.model.ProjectField;
 import dev.vepo.maestro.parser.model.ProjectStage;
 import dev.vepo.maestro.parser.model.Query;
+import dev.vepo.maestro.parser.model.QuerySettings;
 import dev.vepo.maestro.parser.model.SessionizeStage;
 import dev.vepo.maestro.parser.model.SourcePipeline;
 import dev.vepo.maestro.parser.model.SourceStage;
@@ -83,9 +84,19 @@ public final class Maestro {
 
         private final List<ProcessingStage> stages = new ArrayList<>();
 
+        private QuerySettings settings = QuerySettings.empty();
+
         public StreamBuilder aggregate(AggregateFunction... functions) {
             stages.add(new AggregateStage(Arrays.asList(functions)));
             return this;
+        }
+
+        public StreamBuilder applicationId(String applicationId) {
+            return setting("application.id", applicationId);
+        }
+
+        public StreamBuilder bootstrapServers(String bootstrapServers) {
+            return setting("bootstrap.servers", bootstrapServers);
         }
 
         public StreamBuilder branch(Consumer<BranchBuilder> config) {
@@ -101,8 +112,16 @@ public final class Maestro {
                                    .flatMap(s -> ((ToStage) s).topics().stream())
                                    .toList();
             var processing = stages.stream().filter(s -> !(s instanceof ToStage)).toList();
-            var query = new Query(new SourcePipeline(new SourceStage(sourceTopic), processing), sinkTopics);
+            var query = new Query(new SourcePipeline(new SourceStage(sourceTopic), processing), sinkTopics, settings);
             return new StreamModel(query);
+        }
+
+        public StreamBuilder defaultKeySerde(String className) {
+            return setting("default.key.serde", className);
+        }
+
+        public StreamBuilder defaultValueSerde(String className) {
+            return setting("default.value.serde", className);
         }
 
         public StreamBuilder filterWhere(Expression condition) {
@@ -193,6 +212,11 @@ public final class Maestro {
 
         public StreamBuilder sessionizeBy(Duration gap, String... fields) {
             stages.add(new SessionizeStage(Arrays.asList(fields), gap, Optional.empty()));
+            return this;
+        }
+
+        public StreamBuilder setting(String key, String value) {
+            settings = settings.merge(QuerySettings.of(key, value));
             return this;
         }
 

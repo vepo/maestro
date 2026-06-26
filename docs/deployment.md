@@ -14,12 +14,23 @@ mvn -pl maestro-app package -DskipTests
 
 | Flag | Environment variable | Description |
 |------|---------------------|-------------|
-| `--bootstrap-servers` | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap (default `localhost:9092`) |
+| `--bootstrap-servers` | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap |
 | `--application-id` | `APPLICATION_ID` | Kafka Streams application id |
+| `--default-key-serde` | `MAESTRO_DEFAULT_KEY_SERDE` | `default.key.serde` class name |
+| `--default-value-serde` | `MAESTRO_DEFAULT_VALUE_SERDE` | `default.value.serde` class name |
+| `--streams-config` | `MAESTRO_STREAMS_CONFIG_FILE` | Path to a `.properties` file with Kafka Streams settings |
+| `--streams-property` | — | Repeatable `key=value` (any StreamsConfig property) |
 | `--pipeline-text` | `MAESTRO_PIPELINE` | Inline Stream Language |
 | `--pipeline` | — | Path to a `.stream` file |
 
 Provide exactly one of `--pipeline-text`, `--pipeline`, or `MAESTRO_PIPELINE`.
+
+Additional environment variables:
+
+| Variable | Maps to |
+|----------|---------|
+| `MAESTRO_STREAMS_CONFIG` | Inline `.properties` content (`key=value` per line) |
+| `MAESTRO_STREAMS_<PROPERTY>` | `property.name.with.dots` — e.g. `MAESTRO_STREAMS_NUM_STREAM_THREADS` → `num.stream.threads` |
 
 ### Example
 
@@ -27,7 +38,17 @@ Provide exactly one of `--pipeline-text`, `--pipeline`, or `MAESTRO_PIPELINE`.
 java -jar maestro-app/target/maestro-app-0.0.1-SNAPSHOT.jar \
   --bootstrap-servers kafka:9092 \
   --application-id orders-pipeline \
+  --streams-property num.stream.threads=4 \
   --pipeline samples/orders-enrichment/pipeline.stream
+```
+
+Or declare defaults in the `.stream` file:
+
+```text
+FROM orders
+SETTINGS application.id = 'orders-pipeline', bootstrap.servers = 'kafka:9092'
+|> FILTER WHERE status = 'active'
+|> TO enriched_orders
 ```
 
 ## Docker (`maestro-docker`)
@@ -45,6 +66,8 @@ Run with environment variables (no CLI flags in the container):
 docker run --rm \
   -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
   -e APPLICATION_ID=orders-pipeline \
+  -e MAESTRO_STREAMS_NUM_STREAM_THREADS=4 \
+  -e MAESTRO_DEFAULT_VALUE_SERDE=dev.vepo.maestro.engine.serializers.JsonSerde \
   -e MAESTRO_PIPELINE="$(cat samples/filter-active-users/pipeline.stream)" \
   maestro-app:local
 ```
@@ -90,8 +113,14 @@ spec:
   kafka:
     bootstrapServers: kafka:9092
     applicationId: orders-filter
+    defaultValueSerde: dev.vepo.maestro.engine.serializers.JsonSerde
+    properties:
+      num.stream.threads: "4"
+      state.dir: /var/lib/maestro/state
   image: maestro-app:local
 ```
+
+`spec.kafka.properties` is passed to the pod as `MAESTRO_STREAMS_CONFIG`. Per-query `SETTINGS` in `spec.pipeline` are merged first; CR/env values override them.
 
 Example manifests: [samples/kubernetes/](../samples/kubernetes/README.md) (one per catalog pipeline).
 
@@ -127,24 +156,57 @@ For custom lifecycle or config, depend on `maestro-engine` directly:
 ```
 
 ```java
+var model = Maestro.stream()
+    .from("input_topic")
+    .applicationId("sdk-basic-pipeline")
+    .bootstrapServers("localhost:9092")
+    .defaultValueSerde("dev.vepo.maestro.engine.serializers.JsonSerde")
+    .setting("num.stream.threads", "2")
+    .filterWhere(...)
+    .to("output_topic")
+    .build();
+
+try (var app = new MaestroApplication(model, RuntimeConfigOverrides.empty())) {
+    app.start();
+}
+```
+
+Or pass an explicit `MaestroConfigs` map when you manage properties yourself:
+
+```java
 try (var app = new MaestroApplication(streamModel, new MaestroConfigs(kafkaProps))) {
     app.start();
     // block or manage lifecycle
 }
 ```
 
-Serde defaults: String keys, JSON values via `MaestroConfigs.streams()`.
+`MaestroApplication(model, RuntimeConfigOverrides)` merges Query `SETTINGS`, environment variables, and overrides automatically.
+
+Serde defaults: String keys, JSON values via `MaestroConfigs.streams()` unless overridden.
 
 ## Configuration reference
 
-Kafka Streams properties are passed through `MaestroConfigs` as a `Map<String, Object>`. Minimum required:
+Kafka Streams properties are resolved by `MaestroConfigResolver` in this order (later wins):
+
+1. **Query `SETTINGS`** in Stream Language (first Query when multiple)
+2. **Environment variables** (`KAFKA_BOOTSTRAP_SERVERS`, `APPLICATION_ID`, `MAESTRO_STREAMS_*`, …)
+3. **CLI flags** / **operator CR** `spec.kafka` fields
+
+Minimum required after merge:
 
 | Property | Kafka constant | Purpose |
 |----------|----------------|---------|
 | `bootstrap.servers` | `CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG` | Broker list |
 | `application.id` | `StreamsConfig.APPLICATION_ID_CONFIG` | Consumer group / app id |
 
-Additional Streams settings (state dir, replication factor, etc.) can be added to the same map.
+Serde shortcuts:
+
+| Property | Default |
+|----------|---------|
+| `default.key.serde` | `Serdes.StringSerde` |
+| `default.value.serde` | `dev.vepo.maestro.engine.serializers.JsonSerde` |
+
+Window/aggregate/join stages still use internal JSON serdes in `TopologyBuilder`; changing default serdes affects source/sink topics only.
 
 ## Releases
 

@@ -14,6 +14,7 @@ FROM input_topic
 | Construct | Form | Notes |
 |-----------|------|-------|
 | Source | `FROM topic_name` | One source topic per Query |
+| Kafka settings | `SETTINGS key = value, ...` | Optional; after `FROM`, before first `\|>` |
 | Sink | `TO topic` or `TO topic1, topic2` | Terminal stage |
 | Filter | `\|> FILTER WHERE predicate` | Keep records matching predicate |
 | Project | `\|> PROJECT fields: f1, f2` | Select fields from JSON values |
@@ -29,6 +30,21 @@ FROM input_topic
 | Sessionize | `\|> SESSIONIZE BY user_id GAP 30 MINUTES` | Session windows before aggregate |
 
 Comments start with `--` and run to end of line.
+
+## Kafka SETTINGS (per Query)
+
+Declare Kafka Streams defaults on the Query. Keys use standard Kafka property names (`application.id`, `bootstrap.servers`, `default.value.serde`, …). Quote keys that contain reserved words (e.g. `'num.stream.threads' = 2`).
+
+```text
+FROM input
+SETTINGS application.id = 'input-pipeline', 'num.stream.threads' = 2
+|> FILTER WHERE status = 'active'
+|> TO output
+```
+
+When a `.stream` file defines multiple Queries, the **first Query’s** `SETTINGS` apply to the shared stream application.
+
+Override precedence (lowest → highest): **Query SETTINGS** → **environment variables** → **CLI flags** / **operator CR kafka fields**.
 
 ## Predicates
 

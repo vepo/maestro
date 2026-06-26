@@ -49,6 +49,10 @@ public class MaestroApplication implements AutoCloseable {
         this.streams = null;
     }
 
+    public MaestroApplication(StreamModel model, RuntimeConfigOverrides overrides) {
+        this(model, MaestroConfigResolver.resolve(model, overrides));
+    }
+
     public MaestroApplication(String definition, MaestroConfigs configs) {
         this(load(definition), configs);
     }

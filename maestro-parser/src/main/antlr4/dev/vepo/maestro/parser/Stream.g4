@@ -2,7 +2,15 @@ grammar Stream;
 
 stream: pipeline+ EOF;
 
-pipeline: FROM topicName (PIPE stage)*;
+pipeline: FROM topicName pipelineSettings? (PIPE stage)*;
+
+pipelineSettings: SETTINGS configEntry (COMMA configEntry)*;
+
+configEntry: configKey EQ configValue;
+
+configKey: STRING | IDENTIFIER (DOT IDENTIFIER)*;
+
+configValue: STRING | NUMBER | BOOLEAN | IDENTIFIER;
 
 stage
     : FILTER WHERE expression                          # FilterStage
@@ -151,6 +159,7 @@ JOIN: [Jj][Oo][Ii][Nn];
 BRANCH: [Bb][Rr][Aa][Nn][Cc][Hh];
 PATTERN: [Pp][Aa][Tt][Tt][Ee][Rr][Nn];
 SESSIONIZE: [Ss][Ee][Ss][Ss][Ii][Oo][Nn][Ii][Zz][Ee];
+SETTINGS: [Ss][Ee][Tt][Tt][Ii][Nn][Gg][Ss];
 TUMBLING: [Tt][Uu][Mm][Bb][Ll][Ii][Nn][Gg];
 HOPPING: [Hh][Oo][Pp][Pp][Ii][Nn][Gg];
 SLIDING: [Ss][Ll][Ii][Dd][Ii][Nn][Gg];

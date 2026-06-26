@@ -3,6 +3,7 @@ package dev.vepo.maestro.parser;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -51,6 +52,7 @@ import dev.vepo.maestro.parser.model.ProcessingStage;
 import dev.vepo.maestro.parser.model.ProjectField;
 import dev.vepo.maestro.parser.model.ProjectStage;
 import dev.vepo.maestro.parser.model.Query;
+import dev.vepo.maestro.parser.model.QuerySettings;
 import dev.vepo.maestro.parser.model.RegexPredicate;
 import dev.vepo.maestro.parser.model.SessionizeStage;
 import dev.vepo.maestro.parser.model.SourcePipeline;
@@ -78,6 +80,8 @@ public class StreamQueriesBuilder extends StreamBaseListener {
     private final Deque<ProcessingStage> branchStages = new LinkedList<>();
     private int branchDepth = 0;
     private JoinSourceInfo pendingJoinSource;
+
+    private QuerySettings querySettings = QuerySettings.empty();
 
     private StreamModel result;
 
@@ -134,6 +138,30 @@ public class StreamQueriesBuilder extends StreamBaseListener {
             return ComparisonOperator.GT;
         }
         return ComparisonOperator.GTE;
+    }
+
+    private String configKeyText(StreamParser.ConfigKeyContext ctx) {
+        if (ctx.STRING() != null) {
+            return unquote(ctx.STRING().getText());
+        }
+        var parts = new ArrayList<String>();
+        for (var identifier : ctx.IDENTIFIER()) {
+            parts.add(identifier.getText());
+        }
+        return String.join(".", parts);
+    }
+
+    private String configValueText(StreamParser.ConfigValueContext ctx) {
+        if (ctx.STRING() != null) {
+            return unquote(ctx.STRING().getText());
+        }
+        if (ctx.NUMBER() != null) {
+            return ctx.NUMBER().getText();
+        }
+        if (ctx.BOOLEAN() != null) {
+            return ctx.BOOLEAN().getText();
+        }
+        return ctx.IDENTIFIER().getText();
     }
 
     private List<String> destinationList(StreamParser.DestinationListContext ctx) {
@@ -375,8 +403,18 @@ public class StreamQueriesBuilder extends StreamBaseListener {
                                        .filter(s -> !(s instanceof ToStage))
                                        .toList();
         var pipeline = new SourcePipeline(new SourceStage(sourceTopic), processing);
-        queries.push(new Query(pipeline, sinkTopics));
+        queries.push(new Query(pipeline, sinkTopics, querySettings));
+        querySettings = QuerySettings.empty();
         logger.debug("Built query from {} with {} stages, sinks={}", sourceTopic, processing.size(), sinkTopics);
+    }
+
+    @Override
+    public void exitPipelineSettings(StreamParser.PipelineSettingsContext ctx) {
+        var settings = new LinkedHashMap<String, String>();
+        for (var entry : ctx.configEntry()) {
+            settings.put(configKeyText(entry.configKey()), configValueText(entry.configValue()));
+        }
+        querySettings = new QuerySettings(settings);
     }
 
     @Override

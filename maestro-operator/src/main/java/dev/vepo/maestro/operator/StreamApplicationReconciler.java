@@ -28,6 +28,14 @@ public final class StreamApplicationReconciler {
         return namespace == null || namespace.isBlank() ? "default" : namespace;
     }
 
+    private static String toPropertiesString(Map<String, String> properties) {
+        var builder = new StringBuilder();
+        for (var entry : properties.entrySet()) {
+            builder.append(entry.getKey()).append('=').append(entry.getValue()).append('\n');
+        }
+        return builder.toString();
+    }
+
     private final StreamTopologyParser parser = new StreamTopologyParser();
 
     public Deployment buildDeployment(StreamApplication resource) {
@@ -35,9 +43,19 @@ public final class StreamApplicationReconciler {
         var namespace = namespaceOf(resource);
         var labels = Map.of("app", name, "managed-by", "maestro-operator");
         var env = new HashMap<String, String>();
-        env.put("KAFKA_BOOTSTRAP_SERVERS", resource.getSpec().getKafka().getBootstrapServers());
-        env.put("APPLICATION_ID", resource.getSpec().getKafka().getApplicationId());
+        var kafka = resource.getSpec().getKafka();
+        env.put("KAFKA_BOOTSTRAP_SERVERS", kafka.getBootstrapServers());
+        env.put("APPLICATION_ID", kafka.getApplicationId());
         env.put("MAESTRO_PIPELINE", resource.getSpec().getPipeline());
+        if (kafka.getDefaultKeySerde() != null && !kafka.getDefaultKeySerde().isBlank()) {
+            env.put("MAESTRO_DEFAULT_KEY_SERDE", kafka.getDefaultKeySerde());
+        }
+        if (kafka.getDefaultValueSerde() != null && !kafka.getDefaultValueSerde().isBlank()) {
+            env.put("MAESTRO_DEFAULT_VALUE_SERDE", kafka.getDefaultValueSerde());
+        }
+        if (kafka.getProperties() != null && !kafka.getProperties().isEmpty()) {
+            env.put("MAESTRO_STREAMS_CONFIG", toPropertiesString(kafka.getProperties()));
+        }
 
         return new DeploymentBuilder()
                                       .withNewMetadata().withName(name).withNamespace(namespace).withLabels(labels).endMetadata()

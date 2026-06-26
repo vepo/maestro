@@ -29,6 +29,14 @@ spec:
                       type: string
                     applicationId:
                       type: string
+                    defaultKeySerde:
+                      type: string
+                    defaultValueSerde:
+                      type: string
+                    properties:
+                      type: object
+                      additionalProperties:
+                        type: string
                 image:
                   type: string
             status:
