@@ -1,0 +1,14 @@
+apiVersion: maestro.dev/v1alpha1
+kind: StreamApplication
+metadata:
+  name: orders-filter
+  namespace: default
+spec:
+  pipeline: |
+    FROM orders
+    |> FILTER WHERE status = 'active'
+    |> TO enriched_orders
+  kafka:
+    bootstrapServers: kafka:9092
+    applicationId: orders-filter
+  image: maestro-app:local

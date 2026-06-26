@@ -1,0 +1,3 @@
+FROM orders
+|> FILTER WHERE status = 'active'
+|> TO enriched_orders

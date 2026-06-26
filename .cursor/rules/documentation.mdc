@@ -1,0 +1,67 @@
+---
+description: Keep user-facing documentation and samples in sync with code changes
+globs: "docs/**,samples/**,README.md,AGENTS.md"
+alwaysApply: false
+---
+
+# Documentation maintenance
+
+User-facing docs live in `docs/`, `samples/`, and `README.md`. Agents and contributors must keep them aligned with `Stream.g4`, tests, and runtime behavior.
+
+## Canonical hierarchy
+
+When docs disagree with code, fix docs unless the code is wrong:
+
+1. `Stream.g4` — grammar
+2. Parser tests (`maestro-parser/src/test`) — valid DSL
+3. `MaestroApplicationTest` — engine runtime behavior
+4. `docs/samples.md` + `samples/` — human examples
+5. `docs/stream-language.md`, `docs/getting-started.md` — guides
+
+Never document syntax that fails `StreamTopologyParser` unless marked *planned*.
+
+## Update checklist by change type
+
+| Change | Update |
+|--------|--------|
+| New / changed grammar stage | `Stream.g4` → parser test → `docs/stream-language.md` → `docs/samples.md` matrix → sample if user-facing |
+| New engine stage in `TopologyBuilder` | `engine-runtime.mdc` → matrix in `docs/samples.md` → sample README runtime status |
+| New SDK builder method | `samples/sdk/README.md` → `docs/getting-started.md` Option B |
+| CLI / env flag on `MaestroAppMain` | `docs/deployment.md` → `docs/getting-started.md` |
+| Operator reconcile behavior | `docs/deployment.md` → `samples/kubernetes/README.md` → matrix |
+| New deployment layer or module | `README.md` → `docs/index.md` → `AGENTS.md` module table |
+
+## Sample application rules
+
+- Every `samples/*/pipeline.stream` must parse via `StreamTopologyParser`
+- README must list topics, run command, and **engine / operator status**
+- Register new samples in `samples/README.md` table
+- Engine-tested pipelines should mirror or reference a test in `MaestroApplicationTest`
+- Parse-only pipelines must say so and link to `UnsupportedStageException` or operator `Failed` tests
+
+## Runtime status vocabulary
+
+Use consistently across docs and sample READMEs:
+
+| Label | Meaning |
+|-------|---------|
+| **yes** | Engine integration test passes |
+| **partial** | Parses; engine wired but limited or evolving |
+| **parse-only** | Parses; engine throws `UnsupportedStageException` |
+| **fails reconcile** | Operator sets `Failed` phase |
+
+## Do not
+
+- Paste the full ANTLR grammar into markdown (link to `Stream.g4`)
+- Copy DSL from `@Disabled` tests as canonical syntax
+- Document aspirational features without *planned* or *parse-only* labels
+- Add sample pipelines without a README and table entry
+
+## Verification
+
+After doc or sample changes that claim runtime support:
+
+```bash
+mvn -pl maestro-parser -Dtest=SamplesParseTest test
+mvn -pl maestro-engine -Dtest=MaestroApplicationTest test   # if engine status changed
+```

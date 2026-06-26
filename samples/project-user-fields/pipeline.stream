@@ -1,0 +1,3 @@
+FROM input
+|> PROJECT fields: user_id, name, email
+|> TO output

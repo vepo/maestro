@@ -1,0 +1,6 @@
+FROM clickstream
+|> FILTER WHERE event_type = 'page_view'
+|> WINDOW TUMBLING SIZE 5 MINUTES
+|> GROUP BY user_id, page_url
+|> AGGREGATE count(*) AS view_count, avg(time_on_page) AS avg_time
+|> TO analytics_topic

@@ -1,0 +1,3 @@
+FROM input
+|> FILTER WHERE status = 'active'
+|> TO output

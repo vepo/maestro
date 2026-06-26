@@ -25,6 +25,7 @@ Read `AGENTS.md` before any change. Run `mvn verify` before finishing.
 - **Layer check:** identify API / Code / Application / Operator impact before coding
 - **Change order:** grammar → builder → model record → parser test → engine wiring
 - **Canonical DSL:** `maestro-parser/src/main/antlr4/.../Stream.g4` + parser tests in `maestro-parser/src/test`
+- **Docs sync:** update `docs/`, `samples/`, and README per `documentation.mdc` when behavior or syntax changes
 - **New tests:** `Scenario.given().when().then().run()` + domain language (see `testing-dsl.mdc`)
 - **Preferred engine entry:** `MaestroApplication(StreamModel, MaestroConfigs)` — String constructor is CLI/bootstrap only
 - **Verify:** `mvn verify` (or module-scoped test) after production changes

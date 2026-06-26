@@ -160,5 +160,22 @@ Project rules live in `.cursor/rules/`. **`agent-guardrails.mdc` always applies.
 | `testing-dsl.mdc` | Gherkin-like scenario DSL and domain language in tests |
 | `test-coverage.mdc` | Coverage expectations per layer |
 | `ddd-domain-language.mdc` | Domain model and ubiquitous language |
+| `documentation.mdc` | Keep `docs/`, `samples/`, README in sync with grammar and runtime |
 
 When in doubt, read the relevant rule file before editing.
+
+## User documentation
+
+Human-facing guides live outside module source trees:
+
+| Path | Role |
+|------|------|
+| `docs/index.md` | Documentation hub |
+| `docs/why-maestro.md` | Value proposition and adoption guidance |
+| `docs/getting-started.md` | Build and first pipeline |
+| `docs/stream-language.md` | DSL reference |
+| `docs/deployment.md` | JAR, Docker, Kubernetes |
+| `docs/samples.md` | Full pipeline catalog + layer matrix |
+| `samples/` | Runnable `.stream` files, K8s manifests, SDK examples |
+
+When changing grammar, engine stages, CLI flags, or operator behavior, follow `documentation.mdc`.
